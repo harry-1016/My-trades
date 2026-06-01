@@ -1,8 +1,8 @@
 {
-  "name": "BetLog – P&L Tracker",
-  "short_name": "BetLog",
+  "name": "My Trades – P&L Tracker",
+  "short_name": "Mytrades",
   "description": "Daily bet / P&L tracker with calendar view",
-  "start_url": "/index.html",
+  "start_url": "https://harry-1016.github.io/My-trades/index.html",
   "display": "standalone",
   "background_color": "#0a0a0a",
   "theme_color": "#1db954",
