@@ -15,7 +15,7 @@
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getFirestore, doc, collection, onSnapshot, setDoc, deleteDoc, getDocs, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAQ_jtdBztUnpayI6-wAbIk-ooaEafQ708",
@@ -32,19 +32,55 @@ if (FIREBASE_READY) {
   const app = initializeApp(FIREBASE_CONFIG);
   const auth = getAuth(app);
   const db = getFirestore(app);
+  const provider = new GoogleAuthProvider();
+
+  // Expose sign-in / sign-out globally
+  window._fbSignIn = async () => {
+    try {
+      await signInWithPopup(auth, provider);
+    } catch(e) {
+      console.error('Sign-in failed', e);
+      alert('Sign-in failed: ' + (e.message || e));
+    }
+  };
+
+  window._fbSignOut = async () => {
+    if (!confirm('Sign out? Your data is saved to your Google account.')) return;
+    await signOut(auth);
+  };
 
   onAuthStateChanged(auth, user => {
     if (user) {
+      // Hide login screen, show app
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'flex';
+
       window._fbUid = user.uid;
       window._fbDb = db;
-      subscribeFirestore(user.uid, db);
-      document.getElementById('sync-badge').textContent = '● Live';
-      document.getElementById('sync-badge').className = 'sync-badge sync-live';
-    } else {
-      signInAnonymously(auth).catch(() => {
-        document.getElementById('sync-badge').textContent = '◌ Offline';
-        document.getElementById('sync-badge').className = 'sync-badge sync-off';
+      window._fbUser = user;
+
+      // Update all sync badges
+      const name = user.displayName || user.email || 'Signed in';
+      const photo = user.photoURL;
+      document.querySelectorAll('.sync-badge').forEach(el => {
+        el.textContent = '● Live';
+        el.className = 'sync-badge sync-live';
       });
+      // Update account info in settings
+      const accName = document.getElementById('acc-name');
+      const accEmail = document.getElementById('acc-email');
+      const accAvatar = document.getElementById('acc-avatar');
+      if (accName) accName.textContent = name;
+      if (accEmail) accEmail.textContent = user.email || '';
+      if (accAvatar && photo) accAvatar.src = photo;
+
+      subscribeFirestore(user.uid, db);
+    } else {
+      // Show login screen, hide app
+      document.getElementById('login-screen').style.display = 'flex';
+      document.getElementById('app').style.display = 'none';
+      window._fbUid = null;
+      window._fbDb = null;
     }
   });
 
@@ -96,8 +132,12 @@ if (FIREBASE_READY) {
   };
 } else {
   // Firebase not configured – run fully offline
-  document.getElementById('sync-badge').textContent = '◌ Local';
-  document.getElementById('sync-badge').className = 'sync-badge sync-off';
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.querySelectorAll('.sync-badge').forEach(el => {
+    el.textContent = '◌ Local';
+    el.className = 'sync-badge sync-off';
+  });
 }
 </script>
 <style>
@@ -425,10 +465,69 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .import-status{font-size:12px;font-weight:700;padding:8px 2px;min-height:22px;text-align:center}
 .import-status.ok{color:var(--green)}
 .import-status.err{color:var(--red)}
+
+/* ── LOGIN SCREEN ── */
+#login-screen{
+  position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;z-index:9999;padding:32px 24px;
+}
+.login-logo{font-size:48px;margin-bottom:8px}
+.login-title{font-size:32px;font-weight:800;color:var(--text);margin-bottom:6px;letter-spacing:-0.5px}
+.login-sub{font-size:14px;color:var(--text2);margin-bottom:48px;text-align:center;line-height:1.5}
+.login-google-btn{
+  display:flex;align-items:center;gap:12px;background:#fff;color:#1a1a1a;
+  border:none;border-radius:14px;padding:16px 28px;font-size:16px;font-weight:700;
+  font-family:var(--sans);cursor:pointer;width:100%;max-width:320px;justify-content:center;
+  transition:.15s;box-shadow:0 2px 16px rgba(0,0,0,.3);
+}
+.login-google-btn:active{transform:scale(.97)}
+.login-google-btn svg{flex-shrink:0}
+.login-features{display:flex;flex-direction:column;gap:10px;margin-top:36px;width:100%;max-width:320px}
+.login-feat{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2)}
+.login-feat-icon{font-size:18px;width:28px;text-align:center}
+
+/* ── ACCOUNT CARD in Settings ── */
+.acc-card{
+  display:flex;align-items:center;gap:14px;padding:16px;
+  background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);
+  margin-bottom:12px;
+}
+.acc-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;background:var(--surface3);border:2px solid var(--border)}
+.acc-info{flex:1;min-width:0}
+.acc-name{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acc-email{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.signout-btn{
+  background:var(--red-bg);color:var(--red);border:1px solid var(--red-bg2);
+  border-radius:10px;padding:8px 14px;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer;
+  white-space:nowrap;
+}
 </style>
 </head>
 <body>
-<div id="app">
+<!-- ══════════════════════════════════
+     LOGIN SCREEN
+══════════════════════════════════ -->
+<div id="login-screen" style="display:none">
+  <div class="login-logo">📊</div>
+  <div class="login-title">BetLog</div>
+  <div class="login-sub">Your personal P&L tracker.<br>Sign in to sync across all devices.</div>
+  <button class="login-google-btn" onclick="window._fbSignIn && window._fbSignIn()">
+    <svg width="20" height="20" viewBox="0 0 48 48">
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+    </svg>
+    Continue with Google
+  </button>
+  <div class="login-features">
+    <div class="login-feat"><span class="login-feat-icon">🔄</span>Syncs across all your devices</div>
+    <div class="login-feat"><span class="login-feat-icon">🔒</span>Data private to your account</div>
+    <div class="login-feat"><span class="login-feat-icon">☁️</span>Never lose your trade history</div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
 
 <!-- ══════════════════════════════════
      CALENDAR SCREEN (main)
@@ -698,6 +797,18 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
     <div class="set-header" style="display:flex;align-items:center;justify-content:space-between;padding-right:16px"><h1>Settings</h1><span class="sync-badge sync-live" id="sync-badge-set" style="font-size:10px">● Live</span></div>
 
     <div class="set-section">
+      <div class="set-section-title">Account</div>
+      <div class="acc-card">
+        <img class="acc-avatar" id="acc-avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234a5a6a'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 20c0-4 3.6-7 8-7s8 3 8 7'/%3E%3C/svg%3E" alt="avatar"/>
+        <div class="acc-info">
+          <div class="acc-name" id="acc-name">Loading…</div>
+          <div class="acc-email" id="acc-email"></div>
+        </div>
+        <button class="signout-btn" onclick="window._fbSignOut && window._fbSignOut()">Sign out</button>
+      </div>
+    </div>
+
+    <div class="set-section">
       <div class="set-section-title">Preferences</div>
       <div class="set-row">
         <div class="set-row-left">
@@ -902,7 +1013,7 @@ const S = {
   entries: {},
   goals: {}, // { "YYYY-MM": number }
   sport: '🏏 CRICKET',
-  sportName: 'ENAAM CRICKET',
+  sportName: 'HARRY GOUD',
   showWeekends: true,
   privacy: false,
   curMonth: new Date().getMonth(),
