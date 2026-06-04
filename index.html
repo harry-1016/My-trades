@@ -2185,5 +2185,13 @@ renderMonth();
   if(el) el.classList.add('active');
 })();
 </script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/My-trades/sw.js')
+      .then(() => console.log('SW registered'))
+      .catch(e => console.log('SW failed', e));
+  }
+</script>
+
 </body>
 </html>
