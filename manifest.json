@@ -1,13 +1,19 @@
 {
-  "name": "My Trades – P&L Tracker",
-  "short_name": "Mytrades",
-  "description": "Daily bet / P&L tracker with calendar view",
-  "start_url": "https://harry-1016.github.io/My-trades/index.html",
+  "name": "BetLog – P&L Tracker",
+  "short_name": "BetLog",
+  "description": "Personal trading P&L tracker with analytics",
+  "start_url": "/My-trades/",
+  "scope": "/My-trades/",
   "display": "standalone",
-  "background_color": "#0a0a0a",
-  "theme_color": "#1db954",
   "orientation": "portrait",
-"icons": [
-  { "src": "logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
-]
+  "background_color": "#06090d",
+  "theme_color": "#06090d",
+  "icons": [
+    {
+      "src": "logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }
