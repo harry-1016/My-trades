@@ -2,9 +2,9 @@
   "name": "BetLog – P&L Tracker",
   "short_name": "BetLog",
   "description": "Personal trading and betting P&L tracker with analytics",
-  "id": "/My-trades/",
-  "start_url": "/My-trades/",
-  "scope": "/My-trades/",
+  "id": "https://harry-1016.github.io/My-trades/",
+  "start_url": "https://harry-1016.github.io/My-trades/",
+  "scope": "https://harry-1016.github.io/My-trades/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#06090d",
@@ -14,13 +14,13 @@
   "categories": ["finance", "productivity"],
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "https://harry-1016.github.io/My-trades/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-512.png",
+      "src": "https://harry-1016.github.io/My-trades/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -28,10 +28,11 @@
   ],
   "screenshots": [
     {
-      "src": "icon-512.png",
+      "src": "https://harry-1016.github.io/My-trades/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "form_factor": "narrow"
+      "form_factor": "narrow",
+      "label": "BetLog home screen"
     }
   ]
 }
