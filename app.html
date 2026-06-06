@@ -712,6 +712,24 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .pro-toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:all}
 .pro-toast button{background:var(--green);color:#000;border:none;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:800;cursor:pointer;font-family:var(--sans)}
 
+
+/* PRO INFO SHEET */
+.pro-info-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;backdrop-filter:blur(6px)}
+.pro-info-overlay.open{opacity:1;pointer-events:all}
+.pro-info-wrap{width:100%;max-width:480px;background:var(--bg);border-radius:28px 28px 0 0;border-top:1px solid rgba(255,193,7,.3);transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 20px)}
+.pro-info-overlay.open .pro-info-wrap{transform:translateY(0)}
+.pro-info-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 0}
+.pro-info-header{display:flex;justify-content:flex-end;padding:8px 16px 0}
+.pro-info-close{background:var(--surface2);border:none;color:var(--text2);width:28px;height:28px;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.pro-info-body{text-align:center;padding:8px 24px 20px}
+.pro-info-crown{font-size:52px;margin-bottom:12px}
+.pro-info-title{font-size:22px;font-weight:900;color:#ffd700;margin-bottom:6px}
+.pro-info-sub{font-size:14px;color:var(--text2);margin-bottom:20px}
+.pro-features-list{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 18px;text-align:left}
+.pro-feat-item{font-size:14px;color:var(--text);padding:7px 0;border-bottom:1px solid rgba(30,42,56,.5)}
+.pro-feat-item:last-child{border-bottom:none}
+.pro-info-done{width:calc(100% - 32px);margin:0 16px;background:linear-gradient(135deg,#ffd700,#ffaa00);color:#000;border:none;border-radius:14px;padding:15px;font-family:var(--sans);font-size:15px;font-weight:800;cursor:pointer}
+
 </style>
 
 <script>
@@ -723,7 +741,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 window._userPlan = 'free'; // 'free' | 'trial' | 'pro'
 window._trialEnd = null;
 window._selectedPlan = 'yearly';
-window._planLoaded = false; // true once Firebase returns plan
 
 async function _initUserPlan(uid) {
   // Defer until Firebase helpers are ready
@@ -749,12 +766,10 @@ async function _initUserPlan(uid) {
       } else {
         _startTrial(uid);
       }
-      window._planLoaded = true;
       _updateProUI();
     });
   } catch(e) {
     console.error('Plan init error', e);
-    window._planLoaded = true; // fail open
   }
 }
 
@@ -777,8 +792,6 @@ async function _startTrial(uid) {
 }
 
 function _isPro() {
-  // While Firebase is still loading plan, assume pro (avoid false gates)
-  if (!window._planLoaded) return true;
   return window._userPlan === 'pro' || window._userPlan === 'trial';
 }
 
@@ -816,6 +829,36 @@ function _updateProUI() {
 }
 
 // ── PAYWALL OPEN/CLOSE ──
+function handlePlanRowTap() {
+  if (_isPro() && window._planLoaded) {
+    openProInfo();
+  } else {
+    openPaywall();
+  }
+}
+
+function openProInfo() {
+  const sheet = document.getElementById('pro-info-sheet');
+  if (!sheet) return;
+  // Update title/sub dynamically
+  const title = document.getElementById('pro-info-title');
+  const sub = document.getElementById('pro-info-sub');
+  if (window._userPlan === 'trial') {
+    const days = _trialDaysLeft();
+    if (title) title.textContent = 'Free Trial Active';
+    if (sub) sub.textContent = `${days} days remaining · All features unlocked`;
+  } else {
+    if (title) title.textContent = 'Premium Active';
+    if (sub) sub.textContent = 'All features unlocked';
+  }
+  sheet.classList.add('open');
+}
+
+function closeProInfo() {
+  const sheet = document.getElementById('pro-info-sheet');
+  if (sheet) sheet.classList.remove('open');
+}
+
 function openPaywall() {
   const overlay = document.getElementById('paywall-overlay');
   if (!overlay) { console.warn('Paywall overlay not found'); return; }
@@ -1038,7 +1081,14 @@ function showProToast(msg) {
     <div class="cal-header-row" id="cal-header">
       <div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div><div>SUN</div>
     </div>
-
+    <!-- Free plan banner -->
+    <div id="free-plan-banner" style="display:none;align-items:center;justify-content:space-between;margin:0 14px 10px;background:rgba(0,230,118,.06);border:1px solid rgba(0,230,118,.2);border-radius:12px;padding:10px 14px;gap:10px;">
+      <div>
+        <div style="font-size:12px;font-weight:800;color:var(--green);">⚡ Free Plan</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">Last 30 days only · Notes & analytics locked</div>
+      </div>
+      <button onclick="openPaywall()" style="background:var(--green);color:#000;border:none;border-radius:9px;padding:7px 14px;font-family:var(--sans);font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;">Go Premium 👑</button>
+    </div>
     <div class="cal-grid" id="cal-grid"></div>
   </div>
 
@@ -1269,7 +1319,7 @@ function showProToast(msg) {
         <button class="signout-btn" onclick="window._fbSignOut && window._fbSignOut()">Sign out</button>
       </div>
       <!-- Pro status badge -->
-      <div class="pro-status-row" id="pro-status-row" onclick="openPaywall()">
+      <div class="pro-status-row" id="pro-status-row" onclick="handlePlanRowTap()">
         <div class="pro-status-left">
           <div class="pro-status-icon" id="pro-status-icon">⚡</div>
           <div>
@@ -1674,7 +1724,12 @@ function getYearStats(y){
 // NAVIGATION
 // ══════════════════════════════════════════
 function switchNav(nav){
-  // Notes is free for all signed-in users
+  // Pro gate for Notes
+  if(nav==='msg' && !_isPro()){
+    openPaywall();
+    showProToast('📝 Notes is a Premium feature');
+    return;
+  }
   S.curNav=nav;
   const map={cal:'scr-cal',ana:'scr-ana',set:'scr-set',msg:'scr-msg'};
   document.querySelectorAll('.screen').forEach(s=>{
@@ -1732,6 +1787,15 @@ function renderCalendar(){
 }
 
 function renderMonth(){
+  // Show free plan banner if not pro
+  const bannerEl = document.getElementById('free-plan-banner');
+  if(bannerEl){
+    if(!_isPro()){
+      bannerEl.style.display='flex';
+    } else {
+      bannerEl.style.display='none';
+    }
+  }
   const y=S.curYear, m=S.curMonth;
   document.getElementById('month-title').textContent=`${MONTHS[m]} ${y}`;
   const ms=getMonthStats(y,m);
@@ -1865,14 +1929,16 @@ function changeYear(d){S.yearView+=d;renderYear();}
 
 function renderAllTime(){
   // Free users can only see last 30 days
-  if(window._planLoaded && !_isPro()){
+  if(!_isPro()){
+    const atEl=document.getElementById('at-total');
+    if(atEl) atEl.closest('.screen')||document.getElementById('vtab-alltime');
     const container=document.getElementById('vtab-alltime');
     if(container){
       container.innerHTML=`
         <div style="text-align:center;padding:40px 20px;">
           <div style="font-size:48px;margin-bottom:12px">🔒</div>
           <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px">All Time Stats</div>
-          <div style="font-size:13px;color:var(--muted);margin-bottom:24px;line-height:1.6">Upgrade to see your full trading history.</div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:24px;line-height:1.6">Free plan shows last 30 days only.<br>Upgrade to see your full trading history.</div>
           <button onclick="openPaywall()" style="background:var(--green);color:#000;border:none;border-radius:14px;padding:14px 32px;font-family:var(--sans);font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 4px 20px rgba(0,230,118,.3);">Go Premium 👑</button>
         </div>`;
     }
@@ -2532,6 +2598,31 @@ function _exportPDF(){
 <div class="pro-toast" id="pro-toast">
   <span>⚡ Premium feature</span>
   <button onclick="openPaywall()">Upgrade</button>
+</div>
+
+
+<!-- PRO INFO SHEET -->
+<div class="pro-info-overlay" id="pro-info-sheet">
+  <div class="pro-info-wrap">
+    <div class="pro-info-handle"></div>
+    <div class="pro-info-header">
+      <button class="pro-info-close" onclick="closeProInfo()">✕</button>
+    </div>
+    <div class="pro-info-body">
+      <div class="pro-info-crown">👑</div>
+      <div class="pro-info-title" id="pro-info-title">Premium Active</div>
+      <div class="pro-info-sub" id="pro-info-sub">All features unlocked</div>
+      <div class="pro-features-list">
+        <div class="pro-feat-item">✅ Unlimited trade history</div>
+        <div class="pro-feat-item">✅ Advanced analytics</div>
+        <div class="pro-feat-item">✅ Daily notes sync</div>
+        <div class="pro-feat-item">✅ Export to Excel &amp; PDF</div>
+        <div class="pro-feat-item">✅ AI Trade Analysis</div>
+        <div class="pro-feat-item">✅ No ads</div>
+      </div>
+    </div>
+    <button class="pro-info-done" onclick="closeProInfo()">Done</button>
+  </div>
 </div>
 
 </body></html>`;
