@@ -723,6 +723,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 window._userPlan = 'free'; // 'free' | 'trial' | 'pro'
 window._trialEnd = null;
 window._selectedPlan = 'yearly';
+window._planLoaded = false; // true once Firebase returns plan
 
 async function _initUserPlan(uid) {
   // Defer until Firebase helpers are ready
@@ -748,10 +749,12 @@ async function _initUserPlan(uid) {
       } else {
         _startTrial(uid);
       }
+      window._planLoaded = true;
       _updateProUI();
     });
   } catch(e) {
     console.error('Plan init error', e);
+    window._planLoaded = true; // fail open
   }
 }
 
@@ -774,6 +777,8 @@ async function _startTrial(uid) {
 }
 
 function _isPro() {
+  // While Firebase is still loading plan, assume pro (avoid false gates)
+  if (!window._planLoaded) return true;
   return window._userPlan === 'pro' || window._userPlan === 'trial';
 }
 
@@ -1033,14 +1038,7 @@ function showProToast(msg) {
     <div class="cal-header-row" id="cal-header">
       <div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div><div>SUN</div>
     </div>
-    <!-- Free plan banner -->
-    <div id="free-plan-banner" style="display:none;align-items:center;justify-content:space-between;margin:0 14px 10px;background:rgba(0,230,118,.06);border:1px solid rgba(0,230,118,.2);border-radius:12px;padding:10px 14px;gap:10px;">
-      <div>
-        <div style="font-size:12px;font-weight:800;color:var(--green);">⚡ Free Plan</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px;">Last 30 days only · Notes & analytics locked</div>
-      </div>
-      <button onclick="openPaywall()" style="background:var(--green);color:#000;border:none;border-radius:9px;padding:7px 14px;font-family:var(--sans);font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;">Go Premium 👑</button>
-    </div>
+
     <div class="cal-grid" id="cal-grid"></div>
   </div>
 
@@ -1676,12 +1674,7 @@ function getYearStats(y){
 // NAVIGATION
 // ══════════════════════════════════════════
 function switchNav(nav){
-  // Pro gate for Notes
-  if(nav==='msg' && !_isPro()){
-    openPaywall();
-    showProToast('📝 Notes is a Premium feature');
-    return;
-  }
+  // Notes is free for all signed-in users
   S.curNav=nav;
   const map={cal:'scr-cal',ana:'scr-ana',set:'scr-set',msg:'scr-msg'};
   document.querySelectorAll('.screen').forEach(s=>{
@@ -1739,15 +1732,6 @@ function renderCalendar(){
 }
 
 function renderMonth(){
-  // Show free plan banner if not pro
-  const bannerEl = document.getElementById('free-plan-banner');
-  if(bannerEl){
-    if(!_isPro()){
-      bannerEl.style.display='flex';
-    } else {
-      bannerEl.style.display='none';
-    }
-  }
   const y=S.curYear, m=S.curMonth;
   document.getElementById('month-title').textContent=`${MONTHS[m]} ${y}`;
   const ms=getMonthStats(y,m);
@@ -1881,16 +1865,14 @@ function changeYear(d){S.yearView+=d;renderYear();}
 
 function renderAllTime(){
   // Free users can only see last 30 days
-  if(!_isPro()){
-    const atEl=document.getElementById('at-total');
-    if(atEl) atEl.closest('.screen')||document.getElementById('vtab-alltime');
+  if(window._planLoaded && !_isPro()){
     const container=document.getElementById('vtab-alltime');
     if(container){
       container.innerHTML=`
         <div style="text-align:center;padding:40px 20px;">
           <div style="font-size:48px;margin-bottom:12px">🔒</div>
           <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px">All Time Stats</div>
-          <div style="font-size:13px;color:var(--muted);margin-bottom:24px;line-height:1.6">Free plan shows last 30 days only.<br>Upgrade to see your full trading history.</div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:24px;line-height:1.6">Upgrade to see your full trading history.</div>
           <button onclick="openPaywall()" style="background:var(--green);color:#000;border:none;border-radius:14px;padding:14px 32px;font-family:var(--sans);font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 4px 20px rgba(0,230,118,.3);">Go Premium 👑</button>
         </div>`;
     }
