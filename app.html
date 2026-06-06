@@ -18,7 +18,6 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bricolage+Grotesque:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <!-- SheetJS for Excel export / import -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <!-- Firebase -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
@@ -881,64 +880,10 @@ function handleSubscribe() {
     closePaywall();
     return;
   }
-
-  const plan = window._selectedPlan || 'yearly';
-  const amounts = { monthly: 14900, yearly: 99900, lifetime: 199900 };
-  const labels = { monthly: '₹149/month', yearly: '₹999/year', lifetime: '₹1,999 lifetime' };
-
-  const options = {
-    key: 'YOUR_RAZORPAY_KEY_HERE', // 🔑 Replace with your Razorpay Key ID
-    amount: amounts[plan],
-    currency: 'INR',
-    name: 'TradeDairy',
-    description: 'TradeDairy Premium — ' + labels[plan],
-    image: 'https://harry-1016.github.io/My-trades/icon-192.png',
-    prefill: {
-      name: auth.currentUser?.displayName || '',
-      email: auth.currentUser?.email || ''
-    },
-    theme: { color: '#00e676' },
-    handler: async function(response) {
-      // Payment successful — upgrade user to pro
-      try {
-        const user = auth.currentUser;
-        if (user) {
-          const expiry = plan === 'lifetime'
-            ? new Date('2099-12-31')
-            : new Date(Date.now() + (plan === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000);
-
-          await setDoc(doc(db, 'users', user.uid), {
-            plan: 'pro',
-            planType: plan,
-            proExpiry: expiry,
-            razorpay_payment_id: response.razorpay_payment_id,
-            updatedAt: new Date()
-          }, { merge: true });
-
-          window._userPlan = 'pro';
-          _updateProUI();
-          closePaywall();
-          showProToast('🎉 Welcome to TradeDairy Premium!');
-        }
-      } catch(err) {
-        console.error('Error saving pro status:', err);
-        showProToast('Payment done! Please restart the app.');
-      }
-    },
-    modal: {
-      ondismiss: function() {
-        showProToast('Payment cancelled');
-      }
-    }
-  };
-
-  try {
-    const rzp = new Razorpay(options);
-    rzp.open();
-  } catch(err) {
-    showProToast('Payment unavailable. Try again later.');
-    console.error('Razorpay error:', err);
-  }
+  // Razorpay integration will go here
+  // For now show a coming soon toast
+  showProToast('Payment integration coming soon!');
+  closePaywall();
 }
 
 function restorePurchase() {
@@ -1087,6 +1032,14 @@ function showProToast(msg) {
     </div>
     <div class="cal-header-row" id="cal-header">
       <div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div><div>SUN</div>
+    </div>
+    <!-- Free plan banner -->
+    <div id="free-plan-banner" style="display:none;align-items:center;justify-content:space-between;margin:0 14px 10px;background:rgba(0,230,118,.06);border:1px solid rgba(0,230,118,.2);border-radius:12px;padding:10px 14px;gap:10px;">
+      <div>
+        <div style="font-size:12px;font-weight:800;color:var(--green);">⚡ Free Plan</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">Last 30 days only · Notes & analytics locked</div>
+      </div>
+      <button onclick="openPaywall()" style="background:var(--green);color:#000;border:none;border-radius:9px;padding:7px 14px;font-family:var(--sans);font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;">Go Premium 👑</button>
     </div>
     <div class="cal-grid" id="cal-grid"></div>
   </div>
@@ -1238,7 +1191,7 @@ function showProToast(msg) {
       <div class="detail-line">Highest loss: <span class="rv" id="det-worst">₹0.00</span></div>
     </div>
 
-    <div class="win-rate-card">
+    <div class="win-rate-card" id="win-rate-card">
       <div class="wrc-header">
         <h3>Win Rate</h3>
         <div class="info-icon" title="Toggle between by-trades and by-days">?</div>
@@ -1271,7 +1224,7 @@ function showProToast(msg) {
       </div>
     </div>
 
-    <div class="pf-card">
+    <div class="pf-card" id="pf-card">
       <h3>Profit Factor & Expectancy</h3>
       <div class="pf-subtitle">Key risk metrics for your strategy</div>
       <div class="pf-row"><span class="pf-label">Profit Factor</span><span class="pf-val pos" id="pf-factor">—</span></div>
@@ -1723,6 +1676,12 @@ function getYearStats(y){
 // NAVIGATION
 // ══════════════════════════════════════════
 function switchNav(nav){
+  // Pro gate for Notes
+  if(nav==='msg' && !_isPro()){
+    openPaywall();
+    showProToast('📝 Notes is a Premium feature');
+    return;
+  }
   S.curNav=nav;
   const map={cal:'scr-cal',ana:'scr-ana',set:'scr-set',msg:'scr-msg'};
   document.querySelectorAll('.screen').forEach(s=>{
@@ -1780,6 +1739,15 @@ function renderCalendar(){
 }
 
 function renderMonth(){
+  // Show free plan banner if not pro
+  const bannerEl = document.getElementById('free-plan-banner');
+  if(bannerEl){
+    if(!_isPro()){
+      bannerEl.style.display='flex';
+    } else {
+      bannerEl.style.display='none';
+    }
+  }
   const y=S.curYear, m=S.curMonth;
   document.getElementById('month-title').textContent=`${MONTHS[m]} ${y}`;
   const ms=getMonthStats(y,m);
@@ -1912,6 +1880,22 @@ function renderYear(){
 function changeYear(d){S.yearView+=d;renderYear();}
 
 function renderAllTime(){
+  // Free users can only see last 30 days
+  if(!_isPro()){
+    const atEl=document.getElementById('at-total');
+    if(atEl) atEl.closest('.screen')||document.getElementById('vtab-alltime');
+    const container=document.getElementById('vtab-alltime');
+    if(container){
+      container.innerHTML=`
+        <div style="text-align:center;padding:40px 20px;">
+          <div style="font-size:48px;margin-bottom:12px">🔒</div>
+          <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px">All Time Stats</div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:24px;line-height:1.6">Free plan shows last 30 days only.<br>Upgrade to see your full trading history.</div>
+          <button onclick="openPaywall()" style="background:var(--green);color:#000;border:none;border-radius:14px;padding:14px 32px;font-family:var(--sans);font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 4px 20px rgba(0,230,118,.3);">Go Premium 👑</button>
+        </div>`;
+    }
+    return;
+  }
   const s=getAllStats();
   const d=fmtDisp(s.net);
   const atEl=document.getElementById('at-total');
@@ -2140,6 +2124,29 @@ function setWrMode(mode) {
 }
 
 function renderWinRateCard(st) {
+  // Win rate & profit factor are Pro features
+  const wrcEl = document.getElementById('win-rate-card');
+  const pfEl = document.getElementById('pf-card');
+
+  if(!_isPro()){
+    // Show locked state for win rate
+    if(wrcEl) wrcEl.innerHTML = `
+      <div style="text-align:center;padding:24px 16px;">
+        <div style="font-size:32px;margin-bottom:8px">🔒</div>
+        <div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:4px">Win Rate</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Upgrade to see your win rate analytics</div>
+        <button onclick="openPaywall()" style="background:var(--green);color:#000;border:none;border-radius:12px;padding:10px 24px;font-family:var(--sans);font-size:13px;font-weight:800;cursor:pointer;">Go Premium 👑</button>
+      </div>`;
+    // Show locked state for profit factor
+    if(pfEl) pfEl.innerHTML = `
+      <div style="text-align:center;padding:24px 16px;">
+        <div style="font-size:32px;margin-bottom:8px">🔒</div>
+        <div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:4px">Profit Factor</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Upgrade to see your profit factor & expectancy</div>
+        <button onclick="openPaywall()" style="background:var(--green);color:#000;border:none;border-radius:12px;padding:10px 24px;font-family:var(--sans);font-size:13px;font-weight:800;cursor:pointer;">Go Premium 👑</button>
+      </div>`;
+    return;
+  }
   const isTrades = (S.wrMode||'trades') === 'trades';
   const profits = st.allTrades.filter(e=>e.type==='profit');
   const losses  = st.allTrades.filter(e=>e.type==='loss');
