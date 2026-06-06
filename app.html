@@ -67,6 +67,9 @@ if (FIREBASE_READY) {
       _initUserPlan(user.uid);
       window._fbDb = db;
   window._fbServerTimestamp = serverTimestamp;
+  window._fbDoc = doc;
+  window._fbOnSnapshot = onSnapshot;
+  window._fbSetDoc = setDoc;
       window._fbUser = user;
 
       // Update all sync badges
@@ -722,28 +725,27 @@ window._trialEnd = null;
 window._selectedPlan = 'yearly';
 
 async function _initUserPlan(uid) {
+  // Defer until Firebase helpers are ready
+  if (!window._fbDoc || !window._fbOnSnapshot) {
+    setTimeout(() => _initUserPlan(uid), 500);
+    return;
+  }
   try {
-    const db = window._fbDb;
-    if (!db) return;
-    const ref = doc(db, 'users', uid, 'prefs', 'plan');
-    onSnapshot(ref, snap => {
+    const ref = window._fbDoc(window._fbDb, 'users', uid, 'prefs', 'plan');
+    window._fbOnSnapshot(ref, snap => {
       if (snap.exists()) {
         const d = snap.data();
         window._userPlan = d.plan || 'free';
         window._trialEnd = d.trialEnd || null;
-
-        // Check if trial expired
         if (window._userPlan === 'trial' && window._trialEnd) {
           const now = Date.now();
-          const end = window._trialEnd.toMillis ? window._trialEnd.toMillis() : window._trialEnd;
+          const end = window._trialEnd.toMillis ? window._trialEnd.toMillis() : new Date(window._trialEnd).getTime();
           if (now > end) {
             window._userPlan = 'free';
-            // Update in Firestore
-            setDoc(ref, { plan: 'free' }, { merge: true });
+            window._fbSetDoc(ref, { plan: 'free' }, { merge: true });
           }
         }
       } else {
-        // New user — give 30-day trial automatically
         _startTrial(uid);
       }
       _updateProUI();
@@ -755,12 +757,12 @@ async function _initUserPlan(uid) {
 
 async function _startTrial(uid) {
   try {
-    const db = window._fbDb;
-    if (!db) return;
-    const trialEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
-    await setDoc(doc(db, 'users', uid, 'prefs', 'plan'), {
+    if (!window._fbDoc || !window._fbSetDoc) return;
+    const trialEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const ref = window._fbDoc(window._fbDb, 'users', uid, 'prefs', 'plan');
+    await window._fbSetDoc(ref, {
       plan: 'trial',
-      trialStart: (window._fbServerTimestamp ? window._fbServerTimestamp() : new Date()),
+      trialStart: window._fbServerTimestamp ? window._fbServerTimestamp() : new Date(),
       trialEnd: trialEnd
     });
     window._userPlan = 'trial';
