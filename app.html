@@ -22,7 +22,7 @@
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getFirestore, doc, collection, onSnapshot, setDoc, deleteDoc, getDocs, writeBatch, addDoc, query, orderBy, limit, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAQ_jtdBztUnpayI6-wAbIk-ooaEafQ708",
@@ -40,11 +40,24 @@ if (FIREBASE_READY) {
   const auth = getAuth(app);
   const db = getFirestore(app);
   const provider = new GoogleAuthProvider();
+  // Force account picker every time — fixes auto-login to previous account
+  provider.setCustomParameters({ prompt: 'select_account' });
+
+  // Use redirect on mobile (more reliable), popup on desktop
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  // Handle redirect result on page load (mobile sign-in completes here)
+  getRedirectResult(auth).catch(e => console.warn('Redirect result error', e));
 
   // Expose sign-in / sign-out globally
   window._fbSignIn = async () => {
     try {
-      await signInWithPopup(auth, provider);
+      if (isMobile) {
+        // Redirect: page reloads, onAuthStateChanged fires automatically on return
+        await signInWithRedirect(auth, provider);
+      } else {
+        await signInWithPopup(auth, provider);
+      }
     } catch(e) {
       console.error('Sign-in failed', e);
       alert('Sign-in failed: ' + (e.message || e));
@@ -54,6 +67,8 @@ if (FIREBASE_READY) {
   window._fbSignOut = async () => {
     if (!confirm('Sign out? Your data is saved to your Google account.')) return;
     await signOut(auth);
+    // After sign-out, clear any cached Google session so account picker shows next time
+    provider.setCustomParameters({ prompt: 'select_account' });
   };
 
   onAuthStateChanged(auth, user => {
