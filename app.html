@@ -63,6 +63,8 @@ if (FIREBASE_READY) {
       document.getElementById('app').style.display = 'flex';
 
       window._fbUid = user.uid;
+      // Load/init pro plan
+      _initUserPlan(user.uid);
       window._fbDb = db;
       window._fbUser = user;
 
@@ -633,6 +635,79 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   border-radius:10px;padding:8px 14px;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer;
   white-space:nowrap;
 }
+
+/* ══════════════════════════════════════
+   PRO STATUS ROW (Settings)
+══════════════════════════════════════ */
+.pro-status-row{display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,rgba(0,230,118,.08),rgba(0,230,118,.04));border:1px solid rgba(0,230,118,.2);border-radius:14px;padding:14px 16px;margin-top:10px;cursor:pointer;transition:.15s}
+.pro-status-row:active{transform:scale(.98)}
+.pro-status-row.is-pro{background:linear-gradient(135deg,rgba(255,193,7,.08),rgba(255,193,7,.04));border-color:rgba(255,193,7,.25)}
+.pro-status-left{display:flex;align-items:center;gap:12px}
+.pro-status-icon{font-size:22px;line-height:1}
+.pro-status-label{font-size:14px;font-weight:800;color:var(--text)}
+.pro-status-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.pro-status-arrow{font-size:20px;color:var(--muted)}
+
+/* ══════════════════════════════════════
+   PAYWALL OVERLAY
+══════════════════════════════════════ */
+.paywall-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;backdrop-filter:blur(4px)}
+.paywall-overlay.open{opacity:1;pointer-events:all}
+.paywall-sheet{width:100%;max-width:480px;background:var(--bg);border-radius:28px 28px 0 0;border-top:1px solid var(--border);padding:0 0 calc(env(safe-area-inset-bottom,0px) + 20px);max-height:92vh;overflow-y:auto;transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1)}
+.paywall-overlay.open .paywall-sheet{transform:translateY(0)}
+.paywall-sheet::-webkit-scrollbar{display:none}
+
+.paywall-header{padding:20px 20px 0;position:relative}
+.paywall-close{position:absolute;top:16px;right:16px;background:var(--surface2);border:none;color:var(--text2);width:30px;height:30px;border-radius:50%;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.paywall-title-wrap{text-align:center;padding:8px 0 16px}
+.paywall-crown{font-size:36px;margin-bottom:8px}
+.paywall-title{font-size:24px;font-weight:900;letter-spacing:-.5px}
+.paywall-sub{font-size:13px;color:var(--text2);margin-top:6px;line-height:1.5;padding:0 20px}
+
+/* Trial banner */
+.trial-banner{display:flex;align-items:center;gap:10px;background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.25);border-radius:12px;padding:12px 16px;margin:0 16px 12px;font-size:13px;color:var(--text)}
+.trial-icon{font-size:18px}
+
+/* Feature table */
+.paywall-table{margin:0 16px 16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.pt-head{display:grid;grid-template-columns:1fr 60px 72px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface2)}
+.pt-feat{font-size:12px;font-weight:800;color:var(--text2);letter-spacing:.3px}
+.pt-col{font-size:12px;font-weight:800;color:var(--text2);text-align:center}
+.pt-col.pro{color:var(--green)}
+.pt-row{display:grid;grid-template-columns:1fr 60px 72px;padding:9px 14px;border-bottom:1px solid rgba(30,42,56,.5);align-items:center}
+.pt-row:last-child{border-bottom:none}
+.pt-row .pt-feat{font-size:13px;color:var(--text);font-weight:500}
+.pt-row .pt-col{font-size:15px;text-align:center}
+
+/* Plans */
+.plans-wrap{padding:0 16px;display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.plan-card{background:var(--surface);border:1.5px solid var(--border);border-radius:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:.15s;position:relative;overflow:hidden}
+.plan-card:active{transform:scale(.98)}
+.plan-card.selected{border-color:var(--green);background:rgba(0,230,118,.05)}
+.plan-badge{position:absolute;top:10px;right:44px;background:var(--green);color:#000;font-size:10px;font-weight:800;padding:3px 8px;border-radius:99px;letter-spacing:.3px}
+.plan-badge.best{background:#ffd700;color:#000}
+.plan-name{font-size:13px;font-weight:700;color:var(--text2);margin-bottom:4px}
+.plan-price{font-size:22px;font-weight:900;color:var(--text);letter-spacing:-.5px}
+.plan-per{font-size:13px;font-weight:500;color:var(--text2)}
+.plan-equiv{font-size:11px;color:var(--muted);margin-top:3px}
+.plan-radio{width:24px;height:24px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#000;flex-shrink:0;transition:.15s}
+.plan-radio.selected{background:var(--green);border-color:var(--green)}
+
+/* CTA */
+.paywall-cta-wrap{padding:0 16px 12px}
+.paywall-cta-btn{width:100%;background:var(--green);color:#000;border:none;border-radius:16px;padding:17px;font-family:var(--sans);font-size:16px;font-weight:800;cursor:pointer;letter-spacing:.2px;transition:.15s;box-shadow:0 4px 24px rgba(0,230,118,.25)}
+.paywall-cta-btn:active{transform:scale(.97);opacity:.85}
+.paywall-cta-note{text-align:center;font-size:11px;color:var(--muted);margin-top:8px}
+
+/* Footer */
+.paywall-footer{display:flex;align-items:center;justify-content:center;gap:12px;padding:4px 16px 8px}
+.paywall-link{background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--sans);text-decoration:underline}
+
+/* Pro toast */
+.pro-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 16px;display:flex;align-items:center;gap:12px;font-size:13px;font-weight:600;opacity:0;transition:.3s;pointer-events:none;z-index:900;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.pro-toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:all}
+.pro-toast button{background:var(--green);color:#000;border:none;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:800;cursor:pointer;font-family:var(--sans)}
+
 </style>
 </head>
 <body>
@@ -988,6 +1063,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
           <div class="acc-email" id="acc-email"></div>
         </div>
         <button class="signout-btn" onclick="window._fbSignOut && window._fbSignOut()">Sign out</button>
+      </div>
+      <!-- Pro status badge -->
+      <div class="pro-status-row" id="pro-status-row" onclick="openPaywall()">
+        <div class="pro-status-left">
+          <div class="pro-status-icon" id="pro-status-icon">⚡</div>
+          <div>
+            <div class="pro-status-label" id="pro-status-label">Free Plan</div>
+            <div class="pro-status-sub" id="pro-status-sub">Upgrade to unlock all features</div>
+          </div>
+        </div>
+        <div class="pro-status-arrow">›</div>
       </div>
     </div>
 
@@ -2056,6 +2142,10 @@ async function finishImport(imported, skipped) {
 // EXPORT
 // ══════════════════════════════════════════
 function exportExcel(){
+  if (!requirePro('Export to Excel')) return;
+  _exportExcel();
+}
+function _exportExcel(){
   if(typeof XLSX==='undefined'){alert('XLSX library not loaded. Please check your internet connection.');return;}
   const rows=[['Date','Time','Type','Amount (₹)','Note','Lesson']];
   Object.entries(S.entries).sort(([a],[b])=>a.localeCompare(b)).forEach(([dk,list])=>{
@@ -2070,6 +2160,10 @@ function exportExcel(){
 }
 
 function exportPDF(){
+  if (!requirePro('Export to PDF')) return;
+  _exportPDF();
+}
+function _exportPDF(){
   // build printable HTML and open print dialog
   const all=Object.entries(S.entries).sort(([a],[b])=>a.localeCompare(b));
   if(!all.length){alert('No data to export.');return;}
@@ -2097,7 +2191,107 @@ function exportPDF(){
     <div class="scard"><div class="sl">NET P&L</div><div class="sv" style="color:${net>=0?'#00c853':'#dd2222'}">₹${net.toFixed(2)}</div></div>
   </div>
   <table><thead><tr><th>Date</th><th>Time</th><th>Type</th><th>Amount</th><th>Note</th><th>Lesson</th></tr></thead>
-  <tbody>${rows}</tbody></table></body></html>`;
+  <tbody>${rows}</tbody></table>
+<!-- ══════════════════════════════════════
+     PAYWALL OVERLAY
+══════════════════════════════════════ -->
+<div class="paywall-overlay" id="paywall-overlay">
+  <div class="paywall-sheet" id="paywall-sheet">
+
+    <!-- Header -->
+    <div class="paywall-header">
+      <button class="paywall-close" onclick="closePaywall()">✕</button>
+      <div class="paywall-title-wrap">
+        <div class="paywall-crown">👑</div>
+        <h2 class="paywall-title">Go Premium</h2>
+        <p class="paywall-sub">Unlock all features and support the app's development</p>
+      </div>
+    </div>
+
+    <!-- Trial banner -->
+    <div class="trial-banner" id="trial-banner" style="display:none">
+      <span class="trial-icon">🎁</span>
+      <span>Your <strong>30-day free trial</strong> is active!</span>
+    </div>
+
+    <!-- Feature comparison table -->
+    <div class="paywall-table">
+      <div class="pt-head">
+        <div class="pt-feat">Features</div>
+        <div class="pt-col">Free</div>
+        <div class="pt-col pro">Premium</div>
+      </div>
+      <div class="pt-row"><div class="pt-feat">P&L Calendar</div><div class="pt-col">✅</div><div class="pt-col">✅</div></div>
+      <div class="pt-row"><div class="pt-feat">Basic Analytics</div><div class="pt-col">✅</div><div class="pt-col">✅</div></div>
+      <div class="pt-row"><div class="pt-feat">Trade history (30 days)</div><div class="pt-col">✅</div><div class="pt-col">✅</div></div>
+      <div class="pt-row"><div class="pt-feat">No ads</div><div class="pt-col">❌</div><div class="pt-col">✅</div></div>
+      <div class="pt-row"><div class="pt-feat">Advanced analytics</div><div class="pt-col">❌</div><div class="pt-col">✅</div></div>
+      <div class="pt-row"><div class="pt-feat">Export XLS & PDF</div><div class="pt-col">❌</div><div class="pt-col">✅</div></div>
+      <div class="pt-row"><div class="pt-feat">Unlimited history</div><div class="pt-col">❌</div><div class="pt-col">✅</div></div>
+      <div class="pt-row"><div class="pt-feat">Daily notes sync</div><div class="pt-col">❌</div><div class="pt-col">✅</div></div>
+    </div>
+
+    <!-- Plans -->
+    <div class="plans-wrap" id="plans-wrap">
+
+      <!-- Monthly -->
+      <div class="plan-card" id="plan-monthly" onclick="selectPlan('monthly')">
+        <div class="plan-info">
+          <div class="plan-name">Monthly</div>
+          <div class="plan-price">₹149<span class="plan-per">/month</span></div>
+        </div>
+        <div class="plan-radio" id="radio-monthly"></div>
+      </div>
+
+      <!-- Yearly -->
+      <div class="plan-card selected" id="plan-yearly" onclick="selectPlan('yearly')">
+        <div class="plan-badge">Save 44%</div>
+        <div class="plan-info">
+          <div class="plan-name">Yearly</div>
+          <div class="plan-price">₹999<span class="plan-per">/year</span></div>
+          <div class="plan-equiv">₹83/month</div>
+        </div>
+        <div class="plan-radio selected" id="radio-yearly">✓</div>
+      </div>
+
+      <!-- Lifetime -->
+      <div class="plan-card" id="plan-lifetime" onclick="selectPlan('lifetime')">
+        <div class="plan-badge best">Best value</div>
+        <div class="plan-info">
+          <div class="plan-name">Lifetime</div>
+          <div class="plan-price">₹1,999<span class="plan-per"> once</span></div>
+          <div class="plan-equiv">Pay once, use forever</div>
+        </div>
+        <div class="plan-radio" id="radio-lifetime"></div>
+      </div>
+
+    </div>
+
+    <!-- CTA Button -->
+    <div class="paywall-cta-wrap">
+      <button class="paywall-cta-btn" id="paywall-cta-btn" onclick="handleSubscribe()">
+        Start 30-Day Free Trial
+      </button>
+      <div class="paywall-cta-note" id="paywall-cta-note">No payment needed · Cancel anytime</div>
+    </div>
+
+    <!-- Restore / Privacy -->
+    <div class="paywall-footer">
+      <button class="paywall-link" onclick="restorePurchase()">Restore purchases</button>
+      <span style="color:var(--border)">·</span>
+      <button class="paywall-link">Privacy Policy</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Pro feature lock toast -->
+<div class="pro-toast" id="pro-toast">
+  <span>⚡ Premium feature</span>
+  <button onclick="openPaywall()">Upgrade</button>
+</div>
+
+</body></html>`;
   const w=window.open('','_blank');
   w.document.write(html); w.document.close();
   setTimeout(()=>w.print(),400);
@@ -2428,6 +2622,198 @@ function openNoteDetail(dateStr, text){
 function closeNoteDetail(){
   const overlay = document.getElementById('notes-detail-overlay');
   if(overlay){ overlay.classList.remove('open'); }
+}
+
+
+/* ══════════════════════════════════════
+   PRO PLAN & PAYWALL
+══════════════════════════════════════ */
+
+// Plan state
+window._userPlan = 'free'; // 'free' | 'trial' | 'pro'
+window._trialEnd = null;
+window._selectedPlan = 'yearly';
+
+async function _initUserPlan(uid) {
+  try {
+    const db = window._fbDb;
+    if (!db) return;
+    const ref = doc(db, 'users', uid, 'prefs', 'plan');
+    onSnapshot(ref, snap => {
+      if (snap.exists()) {
+        const d = snap.data();
+        window._userPlan = d.plan || 'free';
+        window._trialEnd = d.trialEnd || null;
+
+        // Check if trial expired
+        if (window._userPlan === 'trial' && window._trialEnd) {
+          const now = Date.now();
+          const end = window._trialEnd.toMillis ? window._trialEnd.toMillis() : window._trialEnd;
+          if (now > end) {
+            window._userPlan = 'free';
+            // Update in Firestore
+            setDoc(ref, { plan: 'free' }, { merge: true });
+          }
+        }
+      } else {
+        // New user — give 30-day trial automatically
+        _startTrial(uid);
+      }
+      _updateProUI();
+    });
+  } catch(e) {
+    console.error('Plan init error', e);
+  }
+}
+
+async function _startTrial(uid) {
+  try {
+    const db = window._fbDb;
+    if (!db) return;
+    const trialEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+    await setDoc(doc(db, 'users', uid, 'prefs', 'plan'), {
+      plan: 'trial',
+      trialStart: serverTimestamp(),
+      trialEnd: trialEnd
+    });
+    window._userPlan = 'trial';
+    window._trialEnd = trialEnd;
+    _updateProUI();
+  } catch(e) {
+    console.error('Trial start error', e);
+  }
+}
+
+function _isPro() {
+  return window._userPlan === 'pro' || window._userPlan === 'trial';
+}
+
+function _trialDaysLeft() {
+  if (!window._trialEnd) return 0;
+  const end = window._trialEnd.toMillis ? window._trialEnd.toMillis() : new Date(window._trialEnd).getTime();
+  const diff = end - Date.now();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
+function _updateProUI() {
+  const row = document.getElementById('pro-status-row');
+  const label = document.getElementById('pro-status-label');
+  const sub = document.getElementById('pro-status-sub');
+  const icon = document.getElementById('pro-status-icon');
+  if (!row) return;
+
+  if (window._userPlan === 'pro') {
+    label.textContent = 'Premium Active';
+    sub.textContent = 'All features unlocked';
+    icon.textContent = '👑';
+    row.classList.add('is-pro');
+  } else if (window._userPlan === 'trial') {
+    const days = _trialDaysLeft();
+    label.textContent = `Free Trial — ${days} days left`;
+    sub.textContent = 'All premium features unlocked';
+    icon.textContent = '🎁';
+    row.classList.add('is-pro');
+  } else {
+    label.textContent = 'Free Plan';
+    sub.textContent = 'Tap to upgrade to Premium';
+    icon.textContent = '⚡';
+    row.classList.remove('is-pro');
+  }
+}
+
+// ── PAYWALL OPEN/CLOSE ──
+function openPaywall() {
+  const overlay = document.getElementById('paywall-overlay');
+  overlay.classList.add('open');
+
+  // Show trial banner if on trial
+  const trialBanner = document.getElementById('trial-banner');
+  if (window._userPlan === 'trial') {
+    trialBanner.style.display = 'flex';
+    trialBanner.innerHTML = `<span class="trial-icon">🎁</span><span>Your free trial has <strong>${_trialDaysLeft()} days</strong> left</span>`;
+  } else if (window._userPlan === 'pro') {
+    trialBanner.style.display = 'flex';
+    trialBanner.style.background = 'rgba(255,193,7,.08)';
+    trialBanner.style.borderColor = 'rgba(255,193,7,.25)';
+    trialBanner.innerHTML = `<span class="trial-icon">👑</span><span>You're on <strong>Premium</strong> — all features unlocked!</span>`;
+    document.getElementById('paywall-cta-btn').textContent = 'Already Premium ✓';
+    document.getElementById('paywall-cta-btn').style.background = '#555';
+  } else {
+    trialBanner.style.display = 'none';
+    document.getElementById('paywall-cta-btn').textContent = 'Start 30-Day Free Trial';
+    document.getElementById('paywall-cta-btn').style.background = 'var(--green)';
+  }
+
+  selectPlan('yearly');
+}
+
+function closePaywall() {
+  document.getElementById('paywall-overlay').classList.remove('open');
+}
+
+// Close on backdrop tap
+document.getElementById('paywall-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closePaywall();
+});
+
+// ── PLAN SELECTION ──
+function selectPlan(plan) {
+  window._selectedPlan = plan;
+  ['monthly','yearly','lifetime'].forEach(p => {
+    document.getElementById('plan-' + p).classList.toggle('selected', p === plan);
+    const radio = document.getElementById('radio-' + p);
+    radio.classList.toggle('selected', p === plan);
+    radio.textContent = p === plan ? '✓' : '';
+  });
+
+  // Update CTA text
+  const btn = document.getElementById('paywall-cta-btn');
+  const note = document.getElementById('paywall-cta-note');
+  if (window._userPlan !== 'pro') {
+    if (plan === 'monthly') {
+      btn.textContent = 'Start 30-Day Free Trial';
+      note.textContent = '₹149/month after trial · Cancel anytime';
+    } else if (plan === 'yearly') {
+      btn.textContent = 'Start 30-Day Free Trial';
+      note.textContent = '₹999/year after trial · Cancel anytime';
+    } else {
+      btn.textContent = 'Get Lifetime Access';
+      note.textContent = '₹1,999 one-time payment · Never pay again';
+    }
+  }
+}
+
+// ── SUBSCRIBE ──
+function handleSubscribe() {
+  if (window._userPlan === 'pro') {
+    closePaywall();
+    return;
+  }
+  // Razorpay integration will go here
+  // For now show a coming soon toast
+  showProToast('Payment integration coming soon!');
+  closePaywall();
+}
+
+function restorePurchase() {
+  showProToast('No purchases found to restore');
+}
+
+// ── PRO GATE (call this before pro features) ──
+function requirePro(featureName) {
+  if (_isPro()) return true;
+  showProToast(featureName + ' is a Premium feature');
+  return false;
+}
+
+// ── PRO TOAST ──
+let _toastTimer = null;
+function showProToast(msg) {
+  const toast = document.getElementById('pro-toast');
+  toast.querySelector('span').textContent = msg || '⚡ Premium feature';
+  toast.classList.add('show');
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
 // ══════════════════════════════════════════
