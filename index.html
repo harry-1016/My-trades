@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+  // If opened in browser (not installed app), show landing page
+  if (!window.matchMedia('(display-mode: standalone)').matches && !window.navigator.standalone) {
+    window.location.replace('landing.html');
+  }
+</script>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
 <meta name="theme-color" content="#080c10"/>
