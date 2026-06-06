@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+  // If opened inside the installed app, go straight to main app
+  if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+    window.location.replace('index.html');
+  }
+</script>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="theme-color" content="#06090d"/>
@@ -756,13 +762,27 @@ window.addEventListener('appinstalled', () => {
 
 function triggerInstall() {
   if (isInStandaloneMode) {
-    // Already installed
     alert('TradeLog is already installed on your device!');
     return;
   }
 
-  if (deferredPrompt) {
-    // Android / Chrome — native prompt
+  const isAndroid = /Android/.test(navigator.userAgent);
+
+  if (isAndroid) {
+    // Android — download APK directly
+    const link = document.createElement('a');
+    link.href = 'https://harry-1016.github.io/My-trades/tradelog.apk';
+    link.download = 'tradelog.apk';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Show tip after download starts
+    const note = document.getElementById('install-note');
+    note.textContent = '⬇ APK downloading... Open it to install';
+    note.style.color = 'var(--green)';
+  } else if (deferredPrompt) {
+    // Chrome desktop — native PWA prompt
     deferredPrompt.prompt();
     deferredPrompt.userChoice.then((choice) => {
       if (choice.outcome === 'accepted') {
@@ -776,7 +796,7 @@ function triggerInstall() {
     instructions.style.display = instructions.style.display === 'block' ? 'none' : 'block';
     document.getElementById('install-btn').scrollIntoView({ behavior: 'smooth', block: 'center' });
   } else {
-    // Fallback — open the app directly (it will prompt install from within)
+    // Fallback — open app in browser
     window.open('https://harry-1016.github.io/My-trades/', '_blank');
   }
 }
