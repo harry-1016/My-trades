@@ -710,6 +710,201 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .pro-toast button{background:var(--green);color:#000;border:none;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:800;cursor:pointer;font-family:var(--sans)}
 
 </style>
+
+<script>
+/* ══════════════════════════════════════
+   PRO PLAN & PAYWALL
+══════════════════════════════════════ */
+
+// Plan state
+window._userPlan = 'free'; // 'free' | 'trial' | 'pro'
+window._trialEnd = null;
+window._selectedPlan = 'yearly';
+
+async function _initUserPlan(uid) {
+  try {
+    const db = window._fbDb;
+    if (!db) return;
+    const ref = doc(db, 'users', uid, 'prefs', 'plan');
+    onSnapshot(ref, snap => {
+      if (snap.exists()) {
+        const d = snap.data();
+        window._userPlan = d.plan || 'free';
+        window._trialEnd = d.trialEnd || null;
+
+        // Check if trial expired
+        if (window._userPlan === 'trial' && window._trialEnd) {
+          const now = Date.now();
+          const end = window._trialEnd.toMillis ? window._trialEnd.toMillis() : window._trialEnd;
+          if (now > end) {
+            window._userPlan = 'free';
+            // Update in Firestore
+            setDoc(ref, { plan: 'free' }, { merge: true });
+          }
+        }
+      } else {
+        // New user — give 30-day trial automatically
+        _startTrial(uid);
+      }
+      _updateProUI();
+    });
+  } catch(e) {
+    console.error('Plan init error', e);
+  }
+}
+
+async function _startTrial(uid) {
+  try {
+    const db = window._fbDb;
+    if (!db) return;
+    const trialEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+    await setDoc(doc(db, 'users', uid, 'prefs', 'plan'), {
+      plan: 'trial',
+      trialStart: (window._fbServerTimestamp ? window._fbServerTimestamp() : new Date()),
+      trialEnd: trialEnd
+    });
+    window._userPlan = 'trial';
+    window._trialEnd = trialEnd;
+    _updateProUI();
+  } catch(e) {
+    console.error('Trial start error', e);
+  }
+}
+
+function _isPro() {
+  return window._userPlan === 'pro' || window._userPlan === 'trial';
+}
+
+function _trialDaysLeft() {
+  if (!window._trialEnd) return 0;
+  const end = window._trialEnd.toMillis ? window._trialEnd.toMillis() : new Date(window._trialEnd).getTime();
+  const diff = end - Date.now();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
+function _updateProUI() {
+  const row = document.getElementById('pro-status-row');
+  const label = document.getElementById('pro-status-label');
+  const sub = document.getElementById('pro-status-sub');
+  const icon = document.getElementById('pro-status-icon');
+  if (!row) return;
+
+  if (window._userPlan === 'pro') {
+    label.textContent = 'Premium Active';
+    sub.textContent = 'All features unlocked';
+    icon.textContent = '👑';
+    row.classList.add('is-pro');
+  } else if (window._userPlan === 'trial') {
+    const days = _trialDaysLeft();
+    label.textContent = `Free Trial — ${days} days left`;
+    sub.textContent = 'All premium features unlocked';
+    icon.textContent = '🎁';
+    row.classList.add('is-pro');
+  } else {
+    label.textContent = 'Free Plan';
+    sub.textContent = 'Tap to upgrade to Premium';
+    icon.textContent = '⚡';
+    row.classList.remove('is-pro');
+  }
+}
+
+// ── PAYWALL OPEN/CLOSE ──
+function openPaywall() {
+  const overlay = document.getElementById('paywall-overlay');
+  if (!overlay) { console.warn('Paywall overlay not found'); return; }
+  overlay.classList.add('open');
+
+  // Show trial banner if on trial
+  const trialBanner = document.getElementById('trial-banner');
+  if (window._userPlan === 'trial') {
+    trialBanner.style.display = 'flex';
+    trialBanner.innerHTML = `<span class="trial-icon">🎁</span><span>Your free trial has <strong>${_trialDaysLeft()} days</strong> left</span>`;
+  } else if (window._userPlan === 'pro') {
+    trialBanner.style.display = 'flex';
+    trialBanner.style.background = 'rgba(255,193,7,.08)';
+    trialBanner.style.borderColor = 'rgba(255,193,7,.25)';
+    trialBanner.innerHTML = `<span class="trial-icon">👑</span><span>You're on <strong>Premium</strong> — all features unlocked!</span>`;
+    document.getElementById('paywall-cta-btn').textContent = 'Already Premium ✓';
+    document.getElementById('paywall-cta-btn').style.background = '#555';
+  } else {
+    trialBanner.style.display = 'none';
+    document.getElementById('paywall-cta-btn').textContent = 'Start 30-Day Free Trial';
+    document.getElementById('paywall-cta-btn').style.background = 'var(--green)';
+  }
+
+  selectPlan('yearly');
+}
+
+function closePaywall() {
+  document.getElementById('paywall-overlay').classList.remove('open');
+}
+
+// Close on backdrop tap
+// Backdrop close via event delegation — works regardless of DOM order
+document.addEventListener('click', function(e) {
+  if (e.target && e.target.id === 'paywall-overlay') closePaywall();
+});
+
+// ── PLAN SELECTION ──
+function selectPlan(plan) {
+  window._selectedPlan = plan;
+  ['monthly','yearly','lifetime'].forEach(p => {
+    document.getElementById('plan-' + p).classList.toggle('selected', p === plan);
+    const radio = document.getElementById('radio-' + p);
+    radio.classList.toggle('selected', p === plan);
+    radio.textContent = p === plan ? '✓' : '';
+  });
+
+  // Update CTA text
+  const btn = document.getElementById('paywall-cta-btn');
+  const note = document.getElementById('paywall-cta-note');
+  if (window._userPlan !== 'pro') {
+    if (plan === 'monthly') {
+      btn.textContent = 'Start 30-Day Free Trial';
+      note.textContent = '₹149/month after trial · Cancel anytime';
+    } else if (plan === 'yearly') {
+      btn.textContent = 'Start 30-Day Free Trial';
+      note.textContent = '₹999/year after trial · Cancel anytime';
+    } else {
+      btn.textContent = 'Get Lifetime Access';
+      note.textContent = '₹1,999 one-time payment · Never pay again';
+    }
+  }
+}
+
+// ── SUBSCRIBE ──
+function handleSubscribe() {
+  if (window._userPlan === 'pro') {
+    closePaywall();
+    return;
+  }
+  // Razorpay integration will go here
+  // For now show a coming soon toast
+  showProToast('Payment integration coming soon!');
+  closePaywall();
+}
+
+function restorePurchase() {
+  showProToast('No purchases found to restore');
+}
+
+// ── PRO GATE (call this before pro features) ──
+function requirePro(featureName) {
+  if (_isPro()) return true;
+  showProToast(featureName + ' is a Premium feature');
+  return false;
+}
+
+// ── PRO TOAST ──
+let _toastTimer = null;
+function showProToast(msg) {
+  const toast = document.getElementById('pro-toast');
+  toast.querySelector('span').textContent = msg || '⚡ Premium feature';
+  toast.classList.add('show');
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+}
+</script>
 </head>
 <body>
 <!-- ══════════════════════════════════
@@ -2626,198 +2821,7 @@ function closeNoteDetail(){
 }
 
 
-/* ══════════════════════════════════════
-   PRO PLAN & PAYWALL
-══════════════════════════════════════ */
-
-// Plan state
-window._userPlan = 'free'; // 'free' | 'trial' | 'pro'
-window._trialEnd = null;
-window._selectedPlan = 'yearly';
-
-async function _initUserPlan(uid) {
-  try {
-    const db = window._fbDb;
-    if (!db) return;
-    const ref = doc(db, 'users', uid, 'prefs', 'plan');
-    onSnapshot(ref, snap => {
-      if (snap.exists()) {
-        const d = snap.data();
-        window._userPlan = d.plan || 'free';
-        window._trialEnd = d.trialEnd || null;
-
-        // Check if trial expired
-        if (window._userPlan === 'trial' && window._trialEnd) {
-          const now = Date.now();
-          const end = window._trialEnd.toMillis ? window._trialEnd.toMillis() : window._trialEnd;
-          if (now > end) {
-            window._userPlan = 'free';
-            // Update in Firestore
-            setDoc(ref, { plan: 'free' }, { merge: true });
-          }
-        }
-      } else {
-        // New user — give 30-day trial automatically
-        _startTrial(uid);
-      }
-      _updateProUI();
-    });
-  } catch(e) {
-    console.error('Plan init error', e);
-  }
-}
-
-async function _startTrial(uid) {
-  try {
-    const db = window._fbDb;
-    if (!db) return;
-    const trialEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
-    await setDoc(doc(db, 'users', uid, 'prefs', 'plan'), {
-      plan: 'trial',
-      trialStart: (window._fbServerTimestamp ? window._fbServerTimestamp() : new Date()),
-      trialEnd: trialEnd
-    });
-    window._userPlan = 'trial';
-    window._trialEnd = trialEnd;
-    _updateProUI();
-  } catch(e) {
-    console.error('Trial start error', e);
-  }
-}
-
-function _isPro() {
-  return window._userPlan === 'pro' || window._userPlan === 'trial';
-}
-
-function _trialDaysLeft() {
-  if (!window._trialEnd) return 0;
-  const end = window._trialEnd.toMillis ? window._trialEnd.toMillis() : new Date(window._trialEnd).getTime();
-  const diff = end - Date.now();
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-}
-
-function _updateProUI() {
-  const row = document.getElementById('pro-status-row');
-  const label = document.getElementById('pro-status-label');
-  const sub = document.getElementById('pro-status-sub');
-  const icon = document.getElementById('pro-status-icon');
-  if (!row) return;
-
-  if (window._userPlan === 'pro') {
-    label.textContent = 'Premium Active';
-    sub.textContent = 'All features unlocked';
-    icon.textContent = '👑';
-    row.classList.add('is-pro');
-  } else if (window._userPlan === 'trial') {
-    const days = _trialDaysLeft();
-    label.textContent = `Free Trial — ${days} days left`;
-    sub.textContent = 'All premium features unlocked';
-    icon.textContent = '🎁';
-    row.classList.add('is-pro');
-  } else {
-    label.textContent = 'Free Plan';
-    sub.textContent = 'Tap to upgrade to Premium';
-    icon.textContent = '⚡';
-    row.classList.remove('is-pro');
-  }
-}
-
-// ── PAYWALL OPEN/CLOSE ──
-function openPaywall() {
-  const overlay = document.getElementById('paywall-overlay');
-  if (!overlay) { console.warn('Paywall overlay not found'); return; }
-  overlay.classList.add('open');
-
-  // Show trial banner if on trial
-  const trialBanner = document.getElementById('trial-banner');
-  if (window._userPlan === 'trial') {
-    trialBanner.style.display = 'flex';
-    trialBanner.innerHTML = `<span class="trial-icon">🎁</span><span>Your free trial has <strong>${_trialDaysLeft()} days</strong> left</span>`;
-  } else if (window._userPlan === 'pro') {
-    trialBanner.style.display = 'flex';
-    trialBanner.style.background = 'rgba(255,193,7,.08)';
-    trialBanner.style.borderColor = 'rgba(255,193,7,.25)';
-    trialBanner.innerHTML = `<span class="trial-icon">👑</span><span>You're on <strong>Premium</strong> — all features unlocked!</span>`;
-    document.getElementById('paywall-cta-btn').textContent = 'Already Premium ✓';
-    document.getElementById('paywall-cta-btn').style.background = '#555';
-  } else {
-    trialBanner.style.display = 'none';
-    document.getElementById('paywall-cta-btn').textContent = 'Start 30-Day Free Trial';
-    document.getElementById('paywall-cta-btn').style.background = 'var(--green)';
-  }
-
-  selectPlan('yearly');
-}
-
-function closePaywall() {
-  document.getElementById('paywall-overlay').classList.remove('open');
-}
-
-// Close on backdrop tap
-// Backdrop close via event delegation — works regardless of DOM order
-document.addEventListener('click', function(e) {
-  if (e.target && e.target.id === 'paywall-overlay') closePaywall();
-});
-
-// ── PLAN SELECTION ──
-function selectPlan(plan) {
-  window._selectedPlan = plan;
-  ['monthly','yearly','lifetime'].forEach(p => {
-    document.getElementById('plan-' + p).classList.toggle('selected', p === plan);
-    const radio = document.getElementById('radio-' + p);
-    radio.classList.toggle('selected', p === plan);
-    radio.textContent = p === plan ? '✓' : '';
-  });
-
-  // Update CTA text
-  const btn = document.getElementById('paywall-cta-btn');
-  const note = document.getElementById('paywall-cta-note');
-  if (window._userPlan !== 'pro') {
-    if (plan === 'monthly') {
-      btn.textContent = 'Start 30-Day Free Trial';
-      note.textContent = '₹149/month after trial · Cancel anytime';
-    } else if (plan === 'yearly') {
-      btn.textContent = 'Start 30-Day Free Trial';
-      note.textContent = '₹999/year after trial · Cancel anytime';
-    } else {
-      btn.textContent = 'Get Lifetime Access';
-      note.textContent = '₹1,999 one-time payment · Never pay again';
-    }
-  }
-}
-
-// ── SUBSCRIBE ──
-function handleSubscribe() {
-  if (window._userPlan === 'pro') {
-    closePaywall();
-    return;
-  }
-  // Razorpay integration will go here
-  // For now show a coming soon toast
-  showProToast('Payment integration coming soon!');
-  closePaywall();
-}
-
-function restorePurchase() {
-  showProToast('No purchases found to restore');
-}
-
-// ── PRO GATE (call this before pro features) ──
-function requirePro(featureName) {
-  if (_isPro()) return true;
-  showProToast(featureName + ' is a Premium feature');
-  return false;
-}
-
-// ── PRO TOAST ──
-let _toastTimer = null;
-function showProToast(msg) {
-  const toast = document.getElementById('pro-toast');
-  toast.querySelector('span').textContent = msg || '⚡ Premium feature';
-  toast.classList.add('show');
-  if (_toastTimer) clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
-}
+// Paywall JS moved to <head>
 
 // ══════════════════════════════════════════
 // BOOT
