@@ -66,6 +66,7 @@ if (FIREBASE_READY) {
       // Load/init pro plan
       _initUserPlan(user.uid);
       window._fbDb = db;
+  window._fbServerTimestamp = serverTimestamp;
       window._fbUser = user;
 
       // Update all sync badges
@@ -2673,7 +2674,7 @@ async function _startTrial(uid) {
     const trialEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
     await setDoc(doc(db, 'users', uid, 'prefs', 'plan'), {
       plan: 'trial',
-      trialStart: serverTimestamp(),
+      trialStart: (window._fbServerTimestamp ? window._fbServerTimestamp() : new Date()),
       trialEnd: trialEnd
     });
     window._userPlan = 'trial';
@@ -2752,9 +2753,15 @@ function closePaywall() {
 }
 
 // Close on backdrop tap
-document.getElementById('paywall-overlay').addEventListener('click', function(e) {
-  if (e.target === this) closePaywall();
-});
+// Backdrop close — attached at boot time
+function _initPaywallEvents() {
+  const overlay = document.getElementById('paywall-overlay');
+  if (overlay) {
+    overlay.addEventListener('click', function(e) {
+      if (e.target === this) closePaywall();
+    });
+  }
+}
 
 // ── PLAN SELECTION ──
 function selectPlan(plan) {
@@ -2822,6 +2829,7 @@ function showProToast(msg) {
 load();
 applyPrivacy();
 renderMonth();
+_initPaywallEvents();
 // set initial active analytics pill
 (()=>{
   const p = S.anaPeriod || 'month';
