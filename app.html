@@ -63,14 +63,25 @@ if (FIREBASE_READY) {
       document.getElementById('app').style.display = 'flex';
 
       window._fbUid = user.uid;
-      // Load/init pro plan
-      _initUserPlan(user.uid);
       window._fbDb = db;
   window._fbServerTimestamp = serverTimestamp;
   window._fbDoc = doc;
   window._fbOnSnapshot = onSnapshot;
   window._fbSetDoc = setDoc;
       window._fbUser = user;
+
+      // ✅ FIX: Write user profile to Firestore so admin email lookup works.
+      // Previously, the users/{uid} document was never created, so adminGivePro()
+      // could never find a user by email. Now we upsert email + displayName on
+      // every sign-in (merge:true so no existing data is overwritten).
+      setDoc(doc(db, 'users', user.uid), {
+        email: user.email || '',
+        displayName: user.displayName || '',
+        lastSeen: serverTimestamp()
+      }, { merge: true }).catch(e => console.warn('Profile write failed', e));
+
+      // Load/init pro plan
+      _initUserPlan(user.uid);
 
       // Update all sync badges
       const name = user.displayName || user.email || 'Signed in';
@@ -1445,6 +1456,47 @@ function showProToast(msg) {
         </button>
         <div id="admin-status" style="font-size:12px;color:var(--muted);margin-top:10px;text-align:center;min-height:16px;"></div>
       </div>
+
+      <!-- Promo Code Creator -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-top:12px;">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px;">🎟️ Create Promo Code</div>
+        <input id="promo-code-input" type="text" placeholder="e.g. BETLOG50 (leave blank to auto-generate)"
+          style="width:100%;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--mono);font-size:13px;box-sizing:border-box;margin-bottom:8px;outline:none;text-transform:uppercase;letter-spacing:1px;"/>
+        <select id="promo-plan-select"
+          style="width:100%;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:14px;box-sizing:border-box;margin-bottom:8px;">
+          <option value="pro_lifetime">👑 Pro — Lifetime</option>
+          <option value="pro_yearly">⭐ Pro — 1 Year</option>
+          <option value="trial">🎁 Free Trial — 30 days</option>
+        </select>
+        <select id="promo-uses-select"
+          style="width:100%;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:14px;box-sizing:border-box;margin-bottom:12px;">
+          <option value="1">Single use (1 person)</option>
+          <option value="5">5 uses</option>
+          <option value="10">10 uses</option>
+          <option value="50">50 uses</option>
+          <option value="999">Unlimited uses</option>
+        </select>
+        <button onclick="adminCreatePromo()"
+          style="width:100%;padding:13px;background:var(--cyan);color:#000;border:none;border-radius:10px;font-family:var(--sans);font-size:14px;font-weight:800;cursor:pointer;">
+          🎟️ Create Code
+        </button>
+        <div id="promo-create-status" style="font-size:12px;color:var(--muted);margin-top:10px;text-align:center;min-height:16px;word-break:break-all;"></div>
+      </div>
+    </div>
+
+    <!-- Redeem Promo Code (visible to all users) -->
+    <div class="set-section" id="promo-redeem-section">
+      <div class="set-section-title">🎟️ Promo Code</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;">Have a promo code? Enter it below to activate your plan.</div>
+        <input id="redeem-code-input" type="text" placeholder="Enter promo code"
+          style="width:100%;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--mono);font-size:14px;box-sizing:border-box;margin-bottom:12px;outline:none;text-transform:uppercase;letter-spacing:1px;"/>
+        <button onclick="redeemPromoCode()"
+          style="width:100%;padding:13px;background:var(--green);color:#000;border:none;border-radius:10px;font-family:var(--sans);font-size:14px;font-weight:800;cursor:pointer;">
+          ✅ Redeem Code
+        </button>
+        <div id="redeem-status" style="font-size:12px;color:var(--muted);margin-top:10px;text-align:center;min-height:16px;"></div>
+      </div>
     </div>
 
     <div style="height:20px"></div>
@@ -2427,6 +2479,144 @@ async function adminGivePro() {
     emailInput.value = '';
   } catch(err) {
     console.error('Admin error:', err);
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '❌ Error: ' + err.message;
+  }
+}
+
+// ── ADMIN: CREATE PROMO CODE ──
+async function adminCreatePromo() {
+  const statusEl = document.getElementById('promo-create-status');
+  const plan     = document.getElementById('promo-plan-select').value;
+  const maxUses  = parseInt(document.getElementById('promo-uses-select').value);
+  let   code     = document.getElementById('promo-code-input').value.trim().toUpperCase().replace(/\s+/g, '');
+
+  // Auto-generate code if blank
+  if (!code) {
+    code = Math.random().toString(36).substring(2, 8).toUpperCase();
+  }
+
+  statusEl.style.color = 'var(--muted)';
+  statusEl.textContent = '⏳ Creating...';
+
+  try {
+    const db = window._fbFbDb || window._fbDb;
+    if (!db) throw new Error('Database not ready');
+
+    const { doc, setDoc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+
+    // Check if code already exists
+    const existing = await getDoc(doc(db, 'promoCodes', code));
+    if (existing.exists()) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '❌ Code already exists. Choose a different name.';
+      return;
+    }
+
+    let planData = {};
+    if (plan === 'pro_lifetime') {
+      planData = { plan:'pro', planType:'lifetime', proExpiry: new Date('2099-12-31') };
+    } else if (plan === 'pro_yearly') {
+      planData = { plan:'pro', planType:'yearly', proExpiry: new Date(Date.now()+365*24*60*60*1000) };
+    } else {
+      planData = { plan:'trial', trialEnd: new Date(Date.now()+30*24*60*60*1000) };
+    }
+
+    await setDoc(doc(db, 'promoCodes', code), {
+      code,
+      planData,
+      maxUses,
+      usedCount: 0,
+      usedBy: [],
+      createdBy: window._fbUser?.email || 'admin',
+      createdAt: new Date()
+    });
+
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = `✅ Code created: ${code}  (${maxUses === 999 ? 'unlimited' : maxUses} use${maxUses === 1 ? '' : 's'}, ${plan.replace('_',' ')})`;
+    document.getElementById('promo-code-input').value = '';
+  } catch(err) {
+    console.error('Promo create error:', err);
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '❌ Error: ' + err.message;
+  }
+}
+
+// ── USER: REDEEM PROMO CODE ──
+async function redeemPromoCode() {
+  const statusEl = document.getElementById('redeem-status');
+  const code     = document.getElementById('redeem-code-input').value.trim().toUpperCase().replace(/\s+/g, '');
+
+  if (!code) {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '❌ Please enter a code';
+    return;
+  }
+  if (!window._fbUid) {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '❌ You must be signed in';
+    return;
+  }
+
+  statusEl.style.color = 'var(--muted)';
+  statusEl.textContent = '⏳ Checking code...';
+
+  try {
+    const db = window._fbFbDb || window._fbDb;
+    if (!db) throw new Error('Database not ready');
+
+    const { doc, getDoc, setDoc, updateDoc, arrayUnion, increment } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+
+    const codeRef  = doc(db, 'promoCodes', code);
+    const codeSnap = await getDoc(codeRef);
+
+    if (!codeSnap.exists()) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '❌ Invalid promo code';
+      return;
+    }
+
+    const codeData = codeSnap.data();
+
+    // Already used by this user?
+    if ((codeData.usedBy || []).includes(window._fbUid)) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '❌ You have already used this code';
+      return;
+    }
+
+    // Max uses reached?
+    if (codeData.usedCount >= codeData.maxUses) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '❌ This code has expired or reached its limit';
+      return;
+    }
+
+    // Apply plan to the user
+    const planRef = doc(db, 'users', window._fbUid, 'prefs', 'plan');
+    await setDoc(planRef, {
+      ...codeData.planData,
+      redeemedCode: code,
+      redeemedAt: new Date()
+    }, { merge: true });
+
+    // Mark code as used
+    await updateDoc(codeRef, {
+      usedCount: increment(1),
+      usedBy: arrayUnion(window._fbUid)
+    });
+
+    document.getElementById('redeem-code-input').value = '';
+    statusEl.style.color = 'var(--green)';
+    const planLabel = codeData.planData?.planType === 'lifetime' ? '👑 Pro Lifetime' :
+                      codeData.planData?.plan === 'pro' ? '⭐ Pro 1 Year' : '🎁 Free Trial';
+    statusEl.textContent = `✅ Activated! ${planLabel} unlocked 🎉`;
+
+    // Refresh UI immediately
+    setTimeout(() => { _initUserPlan(window._fbUid); }, 800);
+
+  } catch(err) {
+    console.error('Redeem error:', err);
     statusEl.style.color = 'var(--red)';
     statusEl.textContent = '❌ Error: ' + err.message;
   }
