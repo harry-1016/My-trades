@@ -230,6 +230,27 @@ if (FIREBASE_READY) {
   --mono: 'DM Mono', monospace;
   --sans: 'Bricolage Grotesque', sans-serif;
 }
+
+/* Light theme */
+body.light-theme {
+  --bg: #f0f4f8;
+  --surface: #ffffff;
+  --surface2: #e8edf2;
+  --surface3: #dde3ea;
+  --border: #cdd5df;
+  --green: #00a854;
+  --green-dim: #00873f;
+  --green-bg: #e6f7ef;
+  --green-bg2: #ccefde;
+  --red: #e53935;
+  --red-dim: #c62828;
+  --red-bg: #fdecea;
+  --red-bg2: #fbd7d5;
+  --cyan: #0097a7;
+  --text: #0d1117;
+  --text2: #3a4a5a;
+  --muted: #7a8a9a;
+}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);overflow:hidden}
 #app{display:flex;flex-direction:column;height:100dvh;max-width:430px;margin:0 auto;position:relative;overflow:hidden}
@@ -1357,6 +1378,13 @@ function showProToast(msg) {
         </div>
         <div class="pill on" id="wknd-pill2"></div>
       </div>
+      <div class="set-toggle-row" onclick="toggleTheme()">
+        <div class="set-row-left">
+          <div class="set-row-label" id="theme-label">☀️ Light Theme</div>
+          <div class="set-row-sub">Switch between dark and light mode</div>
+        </div>
+        <div class="pill" id="theme-pill"></div>
+      </div>
     </div>
 
     <div class="set-section">
@@ -2309,11 +2337,11 @@ function togglePnlCollapse(){
 // ══════════════════════════════════════════
 // SETTINGS
 // ══════════════════════════════════════════
+// ── ADMIN CONFIG ──
 const ADMIN_EMAILS = ['harikrishna1699@gmail.com'];
 
 function renderSettings(){
   document.getElementById('set-sport-val').textContent=S.sportName||S.sport;
-  // sync badge
   const liveBadge = document.getElementById('sync-badge');
   const setBadge  = document.getElementById('sync-badge-set');
   if (liveBadge && setBadge) setBadge.textContent = liveBadge.textContent;
@@ -2323,29 +2351,62 @@ function renderSettings(){
   document.getElementById('set-entries').textContent=Object.values(S.entries).reduce((s,l)=>s+l.length,0);
   document.getElementById('privacy-pill').className='pill'+(S.privacy?' on':'');
 
-  // Show admin panel only for admins
+  // Theme pill
+  const isLight = document.body.classList.contains('light-theme');
+  const themePill = document.getElementById('theme-pill');
+  const themeLabel = document.getElementById('theme-label');
+  if(themePill) themePill.className = 'pill' + (isLight ? ' on' : '');
+  if(themeLabel) themeLabel.textContent = isLight ? '☀️ Light Theme' : '🌙 Dark Theme';
+
+  // Admin panel — only for admin email
   const adminPanel = document.getElementById('admin-panel');
-  const userEmail = auth.currentUser?.email || '';
+  const userEmail = window._fbUser?.email || '';
   if(adminPanel) adminPanel.style.display = ADMIN_EMAILS.includes(userEmail) ? 'block' : 'none';
 }
 
-async function adminGivePro() {
-  const email = document.getElementById('admin-email-input').value.trim();
-  const plan = document.getElementById('admin-plan-select').value;
-  const statusEl = document.getElementById('admin-status');
+// ── THEME TOGGLE ──
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('light-theme');
+  localStorage.setItem('tradedairy_theme', isLight ? 'light' : 'dark');
+  renderSettings();
+}
 
-  if (!email) { statusEl.style.color='var(--red)'; statusEl.textContent='❌ Please enter an email'; return; }
-  statusEl.style.color='var(--muted)';
-  statusEl.textContent='⏳ Looking up user...';
+// Apply saved theme on load
+(function(){
+  if(localStorage.getItem('tradedairy_theme') === 'light'){
+    document.body.classList.add('light-theme');
+  }
+})();
+
+// ── ADMIN: GIVE PRO ──
+async function adminGivePro() {
+  const emailInput = document.getElementById('admin-email-input');
+  const planSelect = document.getElementById('admin-plan-select');
+  const statusEl   = document.getElementById('admin-status');
+  const email = emailInput.value.trim();
+  const plan  = planSelect.value;
+
+  if (!email) {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '❌ Please enter an email';
+    return;
+  }
+
+  statusEl.style.color = 'var(--muted)';
+  statusEl.textContent = '⏳ Looking up user...';
 
   try {
+    const db = window._fbFbDb || window._fbDb;
+    if (!db) throw new Error('Database not ready');
+
+    const { getDocs, collection, doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
     const snap = await getDocs(collection(db, 'users'));
     let targetUid = null;
     snap.forEach(d => { if(d.data().email === email) targetUid = d.id; });
 
     if (!targetUid) {
-      statusEl.style.color='var(--red)';
-      statusEl.textContent='❌ User not found. They must log in first.';
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '❌ User not found. They must log in first.';
       return;
     }
 
@@ -2361,12 +2422,13 @@ async function adminGivePro() {
     }
 
     await setDoc(doc(db,'users',targetUid,'prefs','plan'), {...planData, updatedBy:'admin', updatedAt:new Date()}, {merge:true});
-    statusEl.style.color='var(--green)';
-    statusEl.textContent=`✅ Done! ${email} → ${plan.replace('_',' ')}`;
-    document.getElementById('admin-email-input').value='';
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = `✅ Done! ${email} → ${plan.replace('_',' ')}`;
+    emailInput.value = '';
   } catch(err) {
-    statusEl.style.color='var(--red)';
-    statusEl.textContent='❌ Error: '+err.message;
+    console.error('Admin error:', err);
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '❌ Error: ' + err.message;
   }
 }
 function openGoalModal(){
