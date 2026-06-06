@@ -3,7 +3,7 @@
   "short_name": "TradeLog",
   "description": "Personal trading journal. Log trades, track P&L, write daily notes. Synced to your Google account.",
   "id": "/My-trades/",
-  "start_url": "/My-trades/",
+  "start_url": "/My-trades/app.html",
   "scope": "/My-trades/",
   "display": "standalone",
   "orientation": "portrait",
