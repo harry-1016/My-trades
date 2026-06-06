@@ -2,8 +2,13 @@
 <html lang="en">
 <head>
 <script>
-  // If opened in browser (not installed app), show landing page
-  if (!window.matchMedia('(display-mode: standalone)').matches && !window.navigator.standalone) {
+  // Redirect browser users to landing page
+  const isStandalone =
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true ||
+    document.referrer.includes('android-app://');
+
+  if (!isStandalone) {
     window.location.replace('index.html');
   }
 </script>
