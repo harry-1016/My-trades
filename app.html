@@ -2725,6 +2725,7 @@ function _updateProUI() {
 // ── PAYWALL OPEN/CLOSE ──
 function openPaywall() {
   const overlay = document.getElementById('paywall-overlay');
+  if (!overlay) { console.warn('Paywall overlay not found'); return; }
   overlay.classList.add('open');
 
   // Show trial banner if on trial
@@ -2753,15 +2754,10 @@ function closePaywall() {
 }
 
 // Close on backdrop tap
-// Backdrop close — attached at boot time
-function _initPaywallEvents() {
-  const overlay = document.getElementById('paywall-overlay');
-  if (overlay) {
-    overlay.addEventListener('click', function(e) {
-      if (e.target === this) closePaywall();
-    });
-  }
-}
+// Backdrop close via event delegation — works regardless of DOM order
+document.addEventListener('click', function(e) {
+  if (e.target && e.target.id === 'paywall-overlay') closePaywall();
+});
 
 // ── PLAN SELECTION ──
 function selectPlan(plan) {
@@ -2829,7 +2825,6 @@ function showProToast(msg) {
 load();
 applyPrivacy();
 renderMonth();
-_initPaywallEvents();
 // set initial active analytics pill
 (()=>{
   const p = S.anaPeriod || 'month';
