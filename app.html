@@ -1396,6 +1396,29 @@ function showProToast(msg) {
       </div>
       <button class="danger-btn" onclick="clearAll()">⚠ Clear All Data</button>
     </div>
+
+    <!-- Admin Panel -->
+    <div class="set-section" id="admin-panel" style="display:none">
+      <div class="set-section-title">🔐 Admin Panel</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px;">Give Pro Access to User</div>
+        <input id="admin-email-input" type="email" placeholder="user@email.com"
+          style="width:100%;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:14px;box-sizing:border-box;margin-bottom:8px;outline:none;"/>
+        <select id="admin-plan-select"
+          style="width:100%;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:14px;box-sizing:border-box;margin-bottom:12px;">
+          <option value="pro_lifetime">👑 Pro — Lifetime</option>
+          <option value="pro_yearly">⭐ Pro — 1 Year</option>
+          <option value="trial">🎁 Free Trial — 30 days</option>
+          <option value="free">🔒 Revoke (Free Plan)</option>
+        </select>
+        <button onclick="adminGivePro()"
+          style="width:100%;padding:13px;background:var(--green);color:#000;border:none;border-radius:10px;font-family:var(--sans);font-size:14px;font-weight:800;cursor:pointer;">
+          ✅ Apply Plan
+        </button>
+        <div id="admin-status" style="font-size:12px;color:var(--muted);margin-top:10px;text-align:center;min-height:16px;"></div>
+      </div>
+    </div>
+
     <div style="height:20px"></div>
   </div>
 
@@ -2286,6 +2309,8 @@ function togglePnlCollapse(){
 // ══════════════════════════════════════════
 // SETTINGS
 // ══════════════════════════════════════════
+const ADMIN_EMAILS = ['harikrishna1699@gmail.com'];
+
 function renderSettings(){
   document.getElementById('set-sport-val').textContent=S.sportName||S.sport;
   // sync badge
@@ -2297,6 +2322,52 @@ function renderSettings(){
   document.getElementById('set-goal-val').textContent=S.goals[gk]?`₹${(+S.goals[gk]).toFixed(2)}`:'Not set';
   document.getElementById('set-entries').textContent=Object.values(S.entries).reduce((s,l)=>s+l.length,0);
   document.getElementById('privacy-pill').className='pill'+(S.privacy?' on':'');
+
+  // Show admin panel only for admins
+  const adminPanel = document.getElementById('admin-panel');
+  const userEmail = auth.currentUser?.email || '';
+  if(adminPanel) adminPanel.style.display = ADMIN_EMAILS.includes(userEmail) ? 'block' : 'none';
+}
+
+async function adminGivePro() {
+  const email = document.getElementById('admin-email-input').value.trim();
+  const plan = document.getElementById('admin-plan-select').value;
+  const statusEl = document.getElementById('admin-status');
+
+  if (!email) { statusEl.style.color='var(--red)'; statusEl.textContent='❌ Please enter an email'; return; }
+  statusEl.style.color='var(--muted)';
+  statusEl.textContent='⏳ Looking up user...';
+
+  try {
+    const snap = await getDocs(collection(db, 'users'));
+    let targetUid = null;
+    snap.forEach(d => { if(d.data().email === email) targetUid = d.id; });
+
+    if (!targetUid) {
+      statusEl.style.color='var(--red)';
+      statusEl.textContent='❌ User not found. They must log in first.';
+      return;
+    }
+
+    let planData = {};
+    if (plan === 'pro_lifetime') {
+      planData = { plan:'pro', planType:'lifetime', proExpiry: new Date('2099-12-31') };
+    } else if (plan === 'pro_yearly') {
+      planData = { plan:'pro', planType:'yearly', proExpiry: new Date(Date.now()+365*24*60*60*1000) };
+    } else if (plan === 'trial') {
+      planData = { plan:'trial', trialEnd: new Date(Date.now()+30*24*60*60*1000) };
+    } else {
+      planData = { plan:'free' };
+    }
+
+    await setDoc(doc(db,'users',targetUid,'prefs','plan'), {...planData, updatedBy:'admin', updatedAt:new Date()}, {merge:true});
+    statusEl.style.color='var(--green)';
+    statusEl.textContent=`✅ Done! ${email} → ${plan.replace('_',' ')}`;
+    document.getElementById('admin-email-input').value='';
+  } catch(err) {
+    statusEl.style.color='var(--red)';
+    statusEl.textContent='❌ Error: '+err.message;
+  }
 }
 function openGoalModal(){
   const now=new Date(), gk=monthKey(S.curYear,S.curMonth);
