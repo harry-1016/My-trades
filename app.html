@@ -18,6 +18,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bricolage+Grotesque:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <!-- SheetJS for Excel export / import -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <!-- Firebase -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
@@ -880,10 +881,64 @@ function handleSubscribe() {
     closePaywall();
     return;
   }
-  // Razorpay integration will go here
-  // For now show a coming soon toast
-  showProToast('Payment integration coming soon!');
-  closePaywall();
+
+  const plan = window._selectedPlan || 'yearly';
+  const amounts = { monthly: 14900, yearly: 99900, lifetime: 199900 };
+  const labels = { monthly: '₹149/month', yearly: '₹999/year', lifetime: '₹1,999 lifetime' };
+
+  const options = {
+    key: 'YOUR_RAZORPAY_KEY_HERE', // 🔑 Replace with your Razorpay Key ID
+    amount: amounts[plan],
+    currency: 'INR',
+    name: 'TradeDairy',
+    description: 'TradeDairy Premium — ' + labels[plan],
+    image: 'https://harry-1016.github.io/My-trades/icon-192.png',
+    prefill: {
+      name: auth.currentUser?.displayName || '',
+      email: auth.currentUser?.email || ''
+    },
+    theme: { color: '#00e676' },
+    handler: async function(response) {
+      // Payment successful — upgrade user to pro
+      try {
+        const user = auth.currentUser;
+        if (user) {
+          const expiry = plan === 'lifetime'
+            ? new Date('2099-12-31')
+            : new Date(Date.now() + (plan === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000);
+
+          await setDoc(doc(db, 'users', user.uid), {
+            plan: 'pro',
+            planType: plan,
+            proExpiry: expiry,
+            razorpay_payment_id: response.razorpay_payment_id,
+            updatedAt: new Date()
+          }, { merge: true });
+
+          window._userPlan = 'pro';
+          _updateProUI();
+          closePaywall();
+          showProToast('🎉 Welcome to TradeDairy Premium!');
+        }
+      } catch(err) {
+        console.error('Error saving pro status:', err);
+        showProToast('Payment done! Please restart the app.');
+      }
+    },
+    modal: {
+      ondismiss: function() {
+        showProToast('Payment cancelled');
+      }
+    }
+  };
+
+  try {
+    const rzp = new Razorpay(options);
+    rzp.open();
+  } catch(err) {
+    showProToast('Payment unavailable. Try again later.');
+    console.error('Razorpay error:', err);
+  }
 }
 
 function restorePurchase() {
