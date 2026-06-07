@@ -43,32 +43,24 @@ if (FIREBASE_READY) {
   // Force account picker every time — fixes auto-login to previous account
   provider.setCustomParameters({ prompt: 'select_account' });
 
-  // Use redirect on mobile (more reliable), popup on desktop
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-  // Handle redirect result on page load (mobile sign-in completes here)
-  getRedirectResult(auth).catch(e => console.warn('Redirect result error', e));
-
   // Expose sign-in / sign-out globally
-  window._fbSignIn = async () => {
-    try {
-      if (isMobile) {
-        // Redirect: page reloads, onAuthStateChanged fires automatically on return
-        await signInWithRedirect(auth, provider);
-      } else {
-        await signInWithPopup(auth, provider);
+  // ⚠️ signInWithPopup MUST be called synchronously from the tap event.
+  // Any async work before it (await, btn.disabled, etc.) breaks iOS Safari's
+  // trusted-gesture check and silently blocks the popup.
+  window._fbSignIn = () => {
+    signInWithPopup(auth, provider).catch(e => {
+      if (e.code === 'auth/popup-blocked') {
+        signInWithRedirect(auth, provider).catch(e2 => alert('Sign-in failed: ' + (e2.message || e2)));
+      } else if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
+        console.error('Sign-in failed', e);
+        alert('Sign-in failed: ' + (e.message || e));
       }
-    } catch(e) {
-      console.error('Sign-in failed', e);
-      alert('Sign-in failed: ' + (e.message || e));
-    }
+    });
   };
 
   window._fbSignOut = async () => {
     if (!confirm('Sign out? Your data is saved to your Google account.')) return;
     await signOut(auth);
-    // After sign-out, clear any cached Google session so account picker shows next time
-    provider.setCustomParameters({ prompt: 'select_account' });
   };
 
   onAuthStateChanged(auth, user => {
