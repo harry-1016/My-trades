@@ -2,35 +2,7 @@
 <html lang="en">
 <head>
 <script>
-  (function() {
-    const isStandalone =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      window.matchMedia('(display-mode: fullscreen)').matches ||
-      window.navigator.standalone === true ||
-      document.referrer.startsWith('android-app://') ||
-      sessionStorage.getItem('td_app_mode') === '1' ||
-      localStorage.getItem('td_app_ever_opened') === '1';
-
-    if (isStandalone) {
-      sessionStorage.setItem('td_app_mode', '1');
-      localStorage.setItem('td_app_ever_opened', '1');
-    } else {
-      // Check if we're returning from an OAuth redirect — if so, stay on this page
-      const isOAuthReturn = document.referrer.includes('accounts.google.com') ||
-        document.referrer.includes('firebaseapp.com') ||
-        window.location.hash.includes('access_token') ||
-        window.location.search.includes('code=') ||
-        window.location.search.includes('state=');
-
-      if (!isOAuthReturn) {
-        window.location.replace('index.html');
-      } else {
-        // Mark as opened so future loads skip the gate
-        localStorage.setItem('td_app_ever_opened', '1');
-        sessionStorage.setItem('td_app_mode', '1');
-      }
-    }
-  })();
+  window._isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true || document.referrer.startsWith("android-app://");
 </script>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
