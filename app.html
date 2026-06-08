@@ -2885,7 +2885,10 @@ function _exportPDF(){
     <div class="scard"><div class="sl">NET P&L</div><div class="sv" style="color:${net>=0?'#00c853':'#dd2222'}">₹${net.toFixed(2)}</div></div>
   </div>
   <table><thead><tr><th>Date</th><th>Time</th><th>Type</th><th>Amount</th><th>Note</th><th>Lesson</th></tr></thead>
-  <tbody>${rows}</tbody></table>w.document.write(html); w.document.close();
+  <tbody>${rows}</tbody></table>`;
+  const w=window.open('','_blank');
+  if(!w){alert('Please allow popups to export PDF.');return;}
+  w.document.write(html); w.document.close();
   setTimeout(()=>w.print(),400);
 }
 
