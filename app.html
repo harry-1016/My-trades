@@ -1977,7 +1977,9 @@ function renderWeek(){
   let total=0,wins=0,count=0;
   for(let i=0;i<7;i++){
     const d=new Date(ws); d.setDate(ws.getDate()+i);
-    const dk=d.toISOString().slice(0,10);
+    // Fix: use local date instead of UTC to avoid IST timezone shift
+    const yr=d.getFullYear(), mo=String(d.getMonth()+1).padStart(2,'0'), dy=String(d.getDate()).padStart(2,'0');
+    const dk=`${yr}-${mo}-${dy}`;
     const list=getDayEntries(dk);
     const net=list.reduce((s,e)=>e.type==='profit'?s+(+e.amount):s-(+e.amount),0);
     if(list.length){total+=net;count++;if(net>0)wins++;}
