@@ -8,11 +8,27 @@
       window.matchMedia('(display-mode: fullscreen)').matches ||
       window.navigator.standalone === true ||
       document.referrer.startsWith('android-app://') ||
-      sessionStorage.getItem('td_app_mode') === '1';
+      sessionStorage.getItem('td_app_mode') === '1' ||
+      localStorage.getItem('td_app_ever_opened') === '1';
+
     if (isStandalone) {
       sessionStorage.setItem('td_app_mode', '1');
+      localStorage.setItem('td_app_ever_opened', '1');
     } else {
-      window.location.replace('index.html');
+      // Check if we're returning from an OAuth redirect — if so, stay on this page
+      const isOAuthReturn = document.referrer.includes('accounts.google.com') ||
+        document.referrer.includes('firebaseapp.com') ||
+        window.location.hash.includes('access_token') ||
+        window.location.search.includes('code=') ||
+        window.location.search.includes('state=');
+
+      if (!isOAuthReturn) {
+        window.location.replace('index.html');
+      } else {
+        // Mark as opened so future loads skip the gate
+        localStorage.setItem('td_app_ever_opened', '1');
+        sessionStorage.setItem('td_app_mode', '1');
+      }
     }
   })();
 </script>
@@ -73,6 +89,16 @@ if (FIREBASE_READY) {
     if (!confirm('Sign out? Your data is saved to your Google account.')) return;
     await signOut(auth);
   };
+
+
+  // Consume any pending redirect result (signInWithRedirect flow)
+  getRedirectResult(auth).then(result => {
+    if (result && result.user) {
+      console.log("Redirect sign-in completed for", result.user.email);
+    }
+  }).catch(e => {
+    if (e.code !== "auth/no-current-user") console.warn("getRedirectResult error", e);
+  });
 
   onAuthStateChanged(auth, user => {
     if (user) {
