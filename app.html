@@ -18,6 +18,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bricolage+Grotesque:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <!-- SheetJS for Excel export / import -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <!-- Firebase -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
@@ -966,15 +967,91 @@ function selectPlan(plan) {
 }
 
 // ── SUBSCRIBE ──
-function handleSubscribe() {
+async function handleSubscribe() {
   if (window._userPlan === 'pro') {
     closePaywall();
     return;
   }
-  // Razorpay integration will go here
-  // For now show a coming soon toast
-  showProToast('Payment integration coming soon!');
-  closePaywall();
+
+  const plan = window._selectedPlan || 'yearly';
+  const amounts = { monthly: 14900, yearly: 99900, lifetime: 199900 };
+  const labels  = { monthly: '\u20b9149/month', yearly: '\u20b9999/year', lifetime: '\u20b91,999 lifetime' };
+
+  const btn = document.getElementById('paywall-cta-btn');
+  const origText = btn.textContent;
+  btn.textContent = 'Opening payment...';
+  btn.disabled = true;
+
+  try {
+    const options = {
+      key: 'rzp_test_Sz6fD30ma2PoVm',
+      amount: amounts[plan],
+      currency: 'INR',
+      name: 'TradeDairy',
+      description: 'TradeDairy Premium \u2014 ' + labels[plan],
+      image: 'https://harry-1016.github.io/My-trades/icon-192.png',
+      prefill: {
+        name:  window._fbUser?.displayName || '',
+        email: window._fbUser?.email || ''
+      },
+      theme: { color: '#00e676' },
+      handler: async function(response) {
+        // Payment successful \u2014 upgrade user in Firestore
+        try {
+          const db  = window._fbDb;
+          const uid = window._fbUid;
+          if (!db || !uid) throw new Error('Not signed in');
+
+          const expiry = plan === 'lifetime'
+            ? new Date('2099-12-31')
+            : new Date(Date.now() + (plan === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000);
+
+          const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+          await setDoc(
+            doc(db, 'users', uid, 'prefs', 'plan'),
+            {
+              plan: 'pro',
+              planType: plan,
+              proExpiry: expiry,
+              razorpay_payment_id: response.razorpay_payment_id,
+              updatedAt: new Date()
+            },
+            { merge: true }
+          );
+
+          window._userPlan = 'pro';
+          _updateProUI();
+          closePaywall();
+          showProToast('\ud83c\udf89 Welcome to TradeDairy Premium!');
+        } catch(err) {
+          console.error('Upgrade error:', err);
+          showProToast('Payment done! Restart the app to activate.');
+          closePaywall();
+        }
+      },
+      modal: {
+        ondismiss: function() {
+          btn.textContent = origText;
+          btn.disabled = false;
+          showProToast('Payment cancelled');
+        }
+      }
+    };
+
+    const rzp = new Razorpay(options);
+    rzp.on('payment.failed', function(response) {
+      showProToast('Payment failed: ' + (response.error.description || 'Try again'));
+      btn.textContent = origText;
+      btn.disabled = false;
+    });
+    rzp.open();
+
+  } catch(err) {
+    console.error('Subscribe error:', err);
+    showProToast('Something went wrong. Please try again.');
+    btn.textContent = origText;
+    btn.disabled = false;
+  }
 }
 
 function restorePurchase() {
@@ -1977,9 +2054,7 @@ function renderWeek(){
   let total=0,wins=0,count=0;
   for(let i=0;i<7;i++){
     const d=new Date(ws); d.setDate(ws.getDate()+i);
-    // Fix: use local date instead of UTC to avoid IST timezone shift
-    const yr=d.getFullYear(), mo=String(d.getMonth()+1).padStart(2,'0'), dy=String(d.getDate()).padStart(2,'0');
-    const dk=`${yr}-${mo}-${dy}`;
+    const dk=d.toISOString().slice(0,10);
     const list=getDayEntries(dk);
     const net=list.reduce((s,e)=>e.type==='profit'?s+(+e.amount):s-(+e.amount),0);
     if(list.length){total+=net;count++;if(net>0)wins++;}
