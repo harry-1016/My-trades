@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
 <script>
-  // Redirect browser visitors to landing page
   (function() {
     const isStandalone =
       window.matchMedia('(display-mode: standalone)').matches ||
@@ -979,20 +978,14 @@ function selectPlan(plan) {
 
 // ── SUBSCRIBE ──
 async function handleSubscribe() {
-  if (window._userPlan === 'pro') {
-    closePaywall();
-    return;
-  }
-
+  if (window._userPlan === 'pro') { closePaywall(); return; }
   const plan = window._selectedPlan || 'yearly';
   const amounts = { monthly: 14900, yearly: 99900, lifetime: 199900 };
-  const labels  = { monthly: '\u20b9149/month', yearly: '\u20b9999/year', lifetime: '\u20b91,999 lifetime' };
-
+  const labels  = { monthly: '\u20b9149/mo', yearly: '\u20b9999/yr', lifetime: '\u20b91,999' };
   const btn = document.getElementById('paywall-cta-btn');
   const origText = btn.textContent;
   btn.textContent = 'Opening payment...';
   btn.disabled = true;
-
   try {
     const options = {
       key: 'rzp_test_Sz6fD30ma2PoVm',
@@ -1001,56 +994,31 @@ async function handleSubscribe() {
       name: 'TradeDairy',
       description: 'TradeDairy Premium — ' + labels[plan],
       image: 'https://harry-1016.github.io/My-trades/icon-192.png',
-      prefill: {
-        name:  window._fbUser?.displayName || '',
-        email: window._fbUser?.email || ''
-      },
+      prefill: { name: window._fbUser?.displayName||'', email: window._fbUser?.email||'' },
       theme: { color: '#00e676' },
       handler: async function(response) {
         try {
-          const db  = window._fbDb;
-          const uid = window._fbUid;
+          const db = window._fbDb, uid = window._fbUid;
           if (!db || !uid) throw new Error('Not signed in');
-          const expiry = plan === 'lifetime'
-            ? new Date('2099-12-31')
-            : new Date(Date.now() + (plan === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000);
-          const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-          await setDoc(
-            doc(db, 'users', uid, 'prefs', 'plan'),
-            { plan: 'pro', planType: plan, proExpiry: expiry,
-              razorpay_payment_id: response.razorpay_payment_id, updatedAt: new Date() },
-            { merge: true }
-          );
-          window._userPlan = 'pro';
-          _updateProUI();
-          closePaywall();
+          const expiry = plan==='lifetime' ? new Date('2099-12-31')
+            : new Date(Date.now()+(plan==='yearly'?365:30)*24*60*60*1000);
+          const {doc, setDoc} = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+          await setDoc(doc(db,'users',uid,'prefs','plan'),
+            {plan:'pro',planType:plan,proExpiry:expiry,razorpay_payment_id:response.razorpay_payment_id,updatedAt:new Date()},
+            {merge:true});
+          window._userPlan='pro'; _updateProUI(); closePaywall();
           showProToast('\ud83c\udf89 Welcome to TradeDairy Premium!');
         } catch(err) {
-          console.error('Upgrade error:', err);
-          showProToast('Payment done! Restart the app to activate.');
-          closePaywall();
+          showProToast('Payment done! Restart to activate.'); closePaywall();
         }
       },
-      modal: {
-        ondismiss: function() {
-          btn.textContent = origText;
-          btn.disabled = false;
-          showProToast('Payment cancelled');
-        }
-      }
+      modal: { ondismiss: function(){ btn.textContent=origText; btn.disabled=false; showProToast('Payment cancelled'); } }
     };
     const rzp = new Razorpay(options);
-    rzp.on('payment.failed', function(response) {
-      showProToast('Payment failed: ' + (response.error.description || 'Try again'));
-      btn.textContent = origText;
-      btn.disabled = false;
-    });
+    rzp.on('payment.failed', function(r){ showProToast('Payment failed: '+(r.error.description||'Try again')); btn.textContent=origText; btn.disabled=false; });
     rzp.open();
   } catch(err) {
-    console.error('Subscribe error:', err);
-    showProToast('Something went wrong. Please try again.');
-    btn.textContent = origText;
-    btn.disabled = false;
+    showProToast('Something went wrong. Try again.'); btn.textContent=origText; btn.disabled=false;
   }
 }
 
@@ -1200,6 +1168,14 @@ function showProToast(msg) {
     </div>
     <div class="cal-header-row" id="cal-header">
       <div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div><div>SUN</div>
+    </div>
+    <!-- Free plan banner -->
+    <div id="free-plan-banner" style="display:none;align-items:center;justify-content:space-between;margin:0 14px 10px;background:rgba(0,230,118,.06);border:1px solid rgba(0,230,118,.2);border-radius:12px;padding:10px 14px;gap:10px;">
+      <div>
+        <div style="font-size:12px;font-weight:800;color:var(--green);">⚡ Free Plan</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">Last 30 days only · Notes & analytics locked</div>
+      </div>
+      <button onclick="openPaywall()" style="background:var(--green);color:#000;border:none;border-radius:9px;padding:7px 14px;font-family:var(--sans);font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;">Go Premium 👑</button>
     </div>
     <div class="cal-grid" id="cal-grid"></div>
   </div>
@@ -1965,9 +1941,8 @@ function renderCalendar(){
 }
 
 function renderMonth(){
-  // Show free plan banner only after trial expires
   const bannerEl = document.getElementById('free-plan-banner');
-  if(bannerEl) bannerEl.style.display = window._userPlan === 'free' ? 'flex' : 'none';
+  if(bannerEl) bannerEl.style.display = (window._planLoaded && window._userPlan === 'free') ? 'flex' : 'none';
 
   const y=S.curYear, m=S.curMonth;
   document.getElementById('month-title').textContent=`${MONTHS[m]} ${y}`;
@@ -2057,7 +2032,6 @@ function renderWeek(){
   let total=0,wins=0,count=0;
   for(let i=0;i<7;i++){
     const d=new Date(ws); d.setDate(ws.getDate()+i);
-    // Fix: use local date to avoid IST timezone shift
     const yr=d.getFullYear(), mo=String(d.getMonth()+1).padStart(2,'0'), dy=String(d.getDate()).padStart(2,'0');
     const dk=`${yr}-${mo}-${dy}`;
     const list=getDayEntries(dk);
@@ -2895,133 +2869,7 @@ function _exportPDF(){
     <div class="scard"><div class="sl">NET P&L</div><div class="sv" style="color:${net>=0?'#00c853':'#dd2222'}">₹${net.toFixed(2)}</div></div>
   </div>
   <table><thead><tr><th>Date</th><th>Time</th><th>Type</th><th>Amount</th><th>Note</th><th>Lesson</th></tr></thead>
-  <tbody>${rows}</tbody></table>
-<!-- ══════════════════════════════════════
-     PAYWALL OVERLAY
-══════════════════════════════════════ -->
-<div class="paywall-overlay" id="paywall-overlay">
-  <div class="paywall-sheet" id="paywall-sheet">
-
-    <!-- Header -->
-    <div class="paywall-header">
-      <button class="paywall-close" onclick="closePaywall()">✕</button>
-      <div class="paywall-title-wrap">
-        <div class="paywall-crown">👑</div>
-        <h2 class="paywall-title">Go Premium</h2>
-        <p class="paywall-sub">Unlock all features and support the app's development</p>
-      </div>
-    </div>
-
-    <!-- Trial banner -->
-    <div class="trial-banner" id="trial-banner" style="display:none">
-      <span class="trial-icon">🎁</span>
-      <span>Your <strong>30-day free trial</strong> is active!</span>
-    </div>
-
-    <!-- Feature comparison table -->
-    <div class="paywall-table">
-      <div class="pt-head">
-        <div class="pt-feat">Features</div>
-        <div class="pt-col">Free</div>
-        <div class="pt-col pro">Premium</div>
-      </div>
-      <div class="pt-row"><div class="pt-feat">P&L Calendar</div><div class="pt-col">✅</div><div class="pt-col">✅</div></div>
-      <div class="pt-row"><div class="pt-feat">Basic Analytics</div><div class="pt-col">✅</div><div class="pt-col">✅</div></div>
-      <div class="pt-row"><div class="pt-feat">Trade history (30 days)</div><div class="pt-col">✅</div><div class="pt-col">✅</div></div>
-      <div class="pt-row"><div class="pt-feat">No ads</div><div class="pt-col">❌</div><div class="pt-col">✅</div></div>
-      <div class="pt-row"><div class="pt-feat">Advanced analytics</div><div class="pt-col">❌</div><div class="pt-col">✅</div></div>
-      <div class="pt-row"><div class="pt-feat">Export XLS & PDF</div><div class="pt-col">❌</div><div class="pt-col">✅</div></div>
-      <div class="pt-row"><div class="pt-feat">Unlimited history</div><div class="pt-col">❌</div><div class="pt-col">✅</div></div>
-      <div class="pt-row"><div class="pt-feat">Daily notes sync</div><div class="pt-col">❌</div><div class="pt-col">✅</div></div>
-    </div>
-
-    <!-- Plans -->
-    <div class="plans-wrap" id="plans-wrap">
-
-      <!-- Monthly -->
-      <div class="plan-card" id="plan-monthly" onclick="selectPlan('monthly')">
-        <div class="plan-info">
-          <div class="plan-name">Monthly</div>
-          <div class="plan-price">₹149<span class="plan-per">/month</span></div>
-        </div>
-        <div class="plan-radio" id="radio-monthly"></div>
-      </div>
-
-      <!-- Yearly -->
-      <div class="plan-card selected" id="plan-yearly" onclick="selectPlan('yearly')">
-        <div class="plan-badge">Save 44%</div>
-        <div class="plan-info">
-          <div class="plan-name">Yearly</div>
-          <div class="plan-price">₹999<span class="plan-per">/year</span></div>
-          <div class="plan-equiv">₹83/month</div>
-        </div>
-        <div class="plan-radio selected" id="radio-yearly">✓</div>
-      </div>
-
-      <!-- Lifetime -->
-      <div class="plan-card" id="plan-lifetime" onclick="selectPlan('lifetime')">
-        <div class="plan-badge best">Best value</div>
-        <div class="plan-info">
-          <div class="plan-name">Lifetime</div>
-          <div class="plan-price">₹1,999<span class="plan-per"> once</span></div>
-          <div class="plan-equiv">Pay once, use forever</div>
-        </div>
-        <div class="plan-radio" id="radio-lifetime"></div>
-      </div>
-
-    </div>
-
-    <!-- CTA Button -->
-    <div class="paywall-cta-wrap">
-      <button class="paywall-cta-btn" id="paywall-cta-btn" onclick="handleSubscribe()">
-        Start 30-Day Free Trial
-      </button>
-      <div class="paywall-cta-note" id="paywall-cta-note">No payment needed · Cancel anytime</div>
-    </div>
-
-    <!-- Restore / Privacy -->
-    <div class="paywall-footer">
-      <button class="paywall-link" onclick="restorePurchase()">Restore purchases</button>
-      <span style="color:var(--border)">·</span>
-      <button class="paywall-link">Privacy Policy</button>
-    </div>
-
-  </div>
-</div>
-
-<!-- Pro feature lock toast -->
-<div class="pro-toast" id="pro-toast">
-  <span>⚡ Premium feature</span>
-  <button onclick="openPaywall()">Upgrade</button>
-</div>
-
-
-<!-- PRO INFO SHEET -->
-<div class="pro-info-overlay" id="pro-info-sheet">
-  <div class="pro-info-wrap">
-    <div class="pro-info-handle"></div>
-    <div class="pro-info-header">
-      <button class="pro-info-close" onclick="closeProInfo()">✕</button>
-    </div>
-    <div class="pro-info-body">
-      <div class="pro-info-crown">👑</div>
-      <div class="pro-info-title" id="pro-info-title">Premium Active</div>
-      <div class="pro-info-sub" id="pro-info-sub">All features unlocked</div>
-      <div class="pro-features-list">
-        <div class="pro-feat-item">✅ Unlimited trade history</div>
-        <div class="pro-feat-item">✅ Advanced analytics</div>
-        <div class="pro-feat-item">✅ Daily notes sync</div>
-        <div class="pro-feat-item">✅ Export to Excel &amp; PDF</div>
-        <div class="pro-feat-item">✅ AI Trade Analysis</div>
-        <div class="pro-feat-item">✅ No ads</div>
-      </div>
-    </div>
-    <button class="pro-info-done" onclick="closeProInfo()">Done</button>
-  </div>
-</div>
-</body></html>`;
-  const w=window.open('','_blank');
-  w.document.write(html); w.document.close();
+  <tbody>${rows}</tbody></table>w.document.write(html); w.document.close();
   setTimeout(()=>w.print(),400);
 }
 
@@ -3376,5 +3224,132 @@ renderMonth();
   }
 </script>
 
+
+<!-- ══════════════════════════════════════
+     PAYWALL OVERLAY
+══════════════════════════════════════ -->
+<div class="paywall-overlay" id="paywall-overlay">
+  <div class="paywall-sheet" id="paywall-sheet">
+
+    <!-- Header -->
+    <div class="paywall-header">
+      <button class="paywall-close" onclick="closePaywall()">✕</button>
+      <div class="paywall-title-wrap">
+        <div class="paywall-crown">👑</div>
+        <h2 class="paywall-title">Go Premium</h2>
+        <p class="paywall-sub">Unlock all features and support the app's development</p>
+      </div>
+    </div>
+
+    <!-- Trial banner -->
+    <div class="trial-banner" id="trial-banner" style="display:none">
+      <span class="trial-icon">🎁</span>
+      <span>Your <strong>30-day free trial</strong> is active!</span>
+    </div>
+
+    <!-- Feature comparison table -->
+    <div class="paywall-table">
+      <div class="pt-head">
+        <div class="pt-feat">Features</div>
+        <div class="pt-col">Free</div>
+        <div class="pt-col pro">Premium</div>
+      </div>
+      <div class="pt-row"><div class="pt-feat">P&L Calendar</div><div class="pt-col">✅</div><div class="pt-col">✅</div></div>
+      <div class="pt-row"><div class="pt-feat">Basic Analytics</div><div class="pt-col">✅</div><div class="pt-col">✅</div></div>
+      <div class="pt-row"><div class="pt-feat">Trade history (30 days)</div><div class="pt-col">✅</div><div class="pt-col">✅</div></div>
+      <div class="pt-row"><div class="pt-feat">No ads</div><div class="pt-col">❌</div><div class="pt-col">✅</div></div>
+      <div class="pt-row"><div class="pt-feat">Advanced analytics</div><div class="pt-col">❌</div><div class="pt-col">✅</div></div>
+      <div class="pt-row"><div class="pt-feat">Export XLS & PDF</div><div class="pt-col">❌</div><div class="pt-col">✅</div></div>
+      <div class="pt-row"><div class="pt-feat">Unlimited history</div><div class="pt-col">❌</div><div class="pt-col">✅</div></div>
+      <div class="pt-row"><div class="pt-feat">Daily notes sync</div><div class="pt-col">❌</div><div class="pt-col">✅</div></div>
+    </div>
+
+    <!-- Plans -->
+    <div class="plans-wrap" id="plans-wrap">
+
+      <!-- Monthly -->
+      <div class="plan-card" id="plan-monthly" onclick="selectPlan('monthly')">
+        <div class="plan-info">
+          <div class="plan-name">Monthly</div>
+          <div class="plan-price">₹149<span class="plan-per">/month</span></div>
+        </div>
+        <div class="plan-radio" id="radio-monthly"></div>
+      </div>
+
+      <!-- Yearly -->
+      <div class="plan-card selected" id="plan-yearly" onclick="selectPlan('yearly')">
+        <div class="plan-badge">Save 44%</div>
+        <div class="plan-info">
+          <div class="plan-name">Yearly</div>
+          <div class="plan-price">₹999<span class="plan-per">/year</span></div>
+          <div class="plan-equiv">₹83/month</div>
+        </div>
+        <div class="plan-radio selected" id="radio-yearly">✓</div>
+      </div>
+
+      <!-- Lifetime -->
+      <div class="plan-card" id="plan-lifetime" onclick="selectPlan('lifetime')">
+        <div class="plan-badge best">Best value</div>
+        <div class="plan-info">
+          <div class="plan-name">Lifetime</div>
+          <div class="plan-price">₹1,999<span class="plan-per"> once</span></div>
+          <div class="plan-equiv">Pay once, use forever</div>
+        </div>
+        <div class="plan-radio" id="radio-lifetime"></div>
+      </div>
+
+    </div>
+
+    <!-- CTA Button -->
+    <div class="paywall-cta-wrap">
+      <button class="paywall-cta-btn" id="paywall-cta-btn" onclick="handleSubscribe()">
+        Start 30-Day Free Trial
+      </button>
+      <div class="paywall-cta-note" id="paywall-cta-note">No payment needed · Cancel anytime</div>
+    </div>
+
+    <!-- Restore / Privacy -->
+    <div class="paywall-footer">
+      <button class="paywall-link" onclick="restorePurchase()">Restore purchases</button>
+      <span style="color:var(--border)">·</span>
+      <button class="paywall-link">Privacy Policy</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Pro feature lock toast -->
+<div class="pro-toast" id="pro-toast">
+  <span>⚡ Premium feature</span>
+  <button onclick="openPaywall()">Upgrade</button>
+</div>
+
+
+<!-- PRO INFO SHEET -->
+<div class="pro-info-overlay" id="pro-info-sheet">
+  <div class="pro-info-wrap">
+    <div class="pro-info-handle"></div>
+    <div class="pro-info-header">
+      <button class="pro-info-close" onclick="closeProInfo()">✕</button>
+    </div>
+    <div class="pro-info-body">
+      <div class="pro-info-crown">👑</div>
+      <div class="pro-info-title" id="pro-info-title">Premium Active</div>
+      <div class="pro-info-sub" id="pro-info-sub">All features unlocked</div>
+      <div class="pro-features-list">
+        <div class="pro-feat-item">✅ Unlimited trade history</div>
+        <div class="pro-feat-item">✅ Advanced analytics</div>
+        <div class="pro-feat-item">✅ Daily notes sync</div>
+        <div class="pro-feat-item">✅ Export to Excel &amp; PDF</div>
+        <div class="pro-feat-item">✅ AI Trade Analysis</div>
+        <div class="pro-feat-item">✅ No ads</div>
+      </div>
+    </div>
+    <button class="pro-info-done" onclick="closeProInfo()">Done</button>
+  </div>
+</div>
+</body></html>`;
+  const w=window.open('','_blank');
+  
 </body>
 </html>
