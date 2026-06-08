@@ -2,9 +2,20 @@
 <html lang="en">
 <head>
 <script>
-  // If opened in browser (not installed app), show landing page
-  if (!window.matchMedia('(display-mode: standalone)').matches && !window.navigator.standalone) {
-  }
+  // Redirect browser visitors to landing page
+  (function() {
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches ||
+      window.navigator.standalone === true ||
+      document.referrer.startsWith('android-app://') ||
+      sessionStorage.getItem('td_app_mode') === '1';
+    if (isStandalone) {
+      sessionStorage.setItem('td_app_mode', '1');
+    } else {
+      window.location.replace('index.html');
+    }
+  })();
 </script>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
@@ -988,7 +999,7 @@ async function handleSubscribe() {
       amount: amounts[plan],
       currency: 'INR',
       name: 'TradeDairy',
-      description: 'TradeDairy Premium \u2014 ' + labels[plan],
+      description: 'TradeDairy Premium — ' + labels[plan],
       image: 'https://harry-1016.github.io/My-trades/icon-192.png',
       prefill: {
         name:  window._fbUser?.displayName || '',
@@ -996,29 +1007,20 @@ async function handleSubscribe() {
       },
       theme: { color: '#00e676' },
       handler: async function(response) {
-        // Payment successful \u2014 upgrade user in Firestore
         try {
           const db  = window._fbDb;
           const uid = window._fbUid;
           if (!db || !uid) throw new Error('Not signed in');
-
           const expiry = plan === 'lifetime'
             ? new Date('2099-12-31')
             : new Date(Date.now() + (plan === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000);
-
           const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
           await setDoc(
             doc(db, 'users', uid, 'prefs', 'plan'),
-            {
-              plan: 'pro',
-              planType: plan,
-              proExpiry: expiry,
-              razorpay_payment_id: response.razorpay_payment_id,
-              updatedAt: new Date()
-            },
+            { plan: 'pro', planType: plan, proExpiry: expiry,
+              razorpay_payment_id: response.razorpay_payment_id, updatedAt: new Date() },
             { merge: true }
           );
-
           window._userPlan = 'pro';
           _updateProUI();
           closePaywall();
@@ -1037,7 +1039,6 @@ async function handleSubscribe() {
         }
       }
     };
-
     const rzp = new Razorpay(options);
     rzp.on('payment.failed', function(response) {
       showProToast('Payment failed: ' + (response.error.description || 'Try again'));
@@ -1045,7 +1046,6 @@ async function handleSubscribe() {
       btn.disabled = false;
     });
     rzp.open();
-
   } catch(err) {
     console.error('Subscribe error:', err);
     showProToast('Something went wrong. Please try again.');
@@ -1965,7 +1965,10 @@ function renderCalendar(){
 }
 
 function renderMonth(){
-  
+  // Show free plan banner only after trial expires
+  const bannerEl = document.getElementById('free-plan-banner');
+  if(bannerEl) bannerEl.style.display = window._userPlan === 'free' ? 'flex' : 'none';
+
   const y=S.curYear, m=S.curMonth;
   document.getElementById('month-title').textContent=`${MONTHS[m]} ${y}`;
   const ms=getMonthStats(y,m);
@@ -2054,7 +2057,9 @@ function renderWeek(){
   let total=0,wins=0,count=0;
   for(let i=0;i<7;i++){
     const d=new Date(ws); d.setDate(ws.getDate()+i);
-    const dk=d.toISOString().slice(0,10);
+    // Fix: use local date to avoid IST timezone shift
+    const yr=d.getFullYear(), mo=String(d.getMonth()+1).padStart(2,'0'), dy=String(d.getDate()).padStart(2,'0');
+    const dk=`${yr}-${mo}-${dy}`;
     const list=getDayEntries(dk);
     const net=list.reduce((s,e)=>e.type==='profit'?s+(+e.amount):s-(+e.amount),0);
     if(list.length){total+=net;count++;if(net>0)wins++;}
