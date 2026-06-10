@@ -394,6 +394,43 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .add-trade-btn{width:100%;padding:16px;background:#fff;color:#000;border:none;border-radius:14px;font-family:var(--sans);font-size:15px;font-weight:700;cursor:pointer;transition:.15s}
 .add-trade-btn:active{transform:scale(.98)}
 
+
+/* ══════════════════════════════════════
+   DEPOSIT / WITHDRAW ROW
+══════════════════════════════════════ */
+.dw-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 14px 10px}
+.dw-card{background:var(--surface);border-radius:var(--radius);padding:12px 16px;border:1px solid var(--border);cursor:pointer;transition:.15s;display:flex;flex-direction:column;gap:4px;position:relative}
+.dw-card:active{transform:scale(.98)}
+.dw-card.dep{border-left:3px solid var(--green)}
+.dw-card.wit{border-left:3px solid #f59e0b}
+.dw-label{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.dw-val{font-family:var(--mono);font-size:18px;font-weight:500}
+.dw-val.dep{color:var(--green)}
+.dw-val.wit{color:#f59e0b}
+.dw-sub{font-size:10px;color:var(--muted)}
+.dw-plus{position:absolute;top:10px;right:12px;color:var(--muted);font-size:16px;font-weight:700}
+.dw-net-row{margin:0 14px 10px;background:var(--surface);border-radius:var(--radius);padding:12px 16px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.dw-net-label{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.dw-net-val{font-family:var(--mono);font-size:16px;font-weight:500}
+
+/* deposit/withdraw modal */
+.dw-type-toggle{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}
+.dw-type-btn{padding:11px;border-radius:10px;border:2px solid var(--border);background:transparent;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer;color:var(--muted);transition:.2s}
+.dw-type-btn.dep-active{border-color:var(--green);color:var(--green);background:var(--green-bg)}
+.dw-type-btn.wit-active{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,.08)}
+.dw-history-list{max-height:220px;overflow-y:auto;margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.dw-history-list::-webkit-scrollbar{display:none}
+.dw-hist-item{display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:10px;padding:10px 14px}
+.dw-hist-left{display:flex;flex-direction:column;gap:2px}
+.dw-hist-type{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.dw-hist-type.dep{color:var(--green)}
+.dw-hist-type.wit{color:#f59e0b}
+.dw-hist-date{font-size:11px;color:var(--muted)}
+.dw-hist-amt{font-family:var(--mono);font-size:16px;font-weight:500}
+.dw-hist-amt.dep{color:var(--green)}
+.dw-hist-amt.wit{color:#f59e0b}
+.dw-hist-del{background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:4px;line-height:1}
+.dw-hist-note{font-size:11px;color:var(--muted);margin-top:1px}
 /* ══════════════════════════════════════
    ADD TRADE MODAL (overlay on day screen)
 ══════════════════════════════════════ */
@@ -1147,6 +1184,21 @@ function showProToast(msg) {
         <div class="sc-value neu" id="m-wr">0%</div>
       </div>
     </div>
+    <!-- DEPOSIT / WITHDRAW ROW -->
+    <div class="dw-row">
+      <div class="dw-card dep" onclick="openDWModal('deposit')">
+        <div class="dw-label">DEPOSITED</div>
+        <div class="dw-val dep" id="m-dep">₹0.00</div>
+        <div class="dw-sub" id="m-dep-count">0 entries</div>
+        <span class="dw-plus">+</span>
+      </div>
+      <div class="dw-card wit" onclick="openDWModal('withdraw')">
+        <div class="dw-label">WITHDRAWN</div>
+        <div class="dw-val wit" id="m-wit">₹0.00</div>
+        <div class="dw-sub" id="m-wit-count">0 entries</div>
+        <span class="dw-plus">+</span>
+      </div>
+    </div>
     <div class="goal-wrap">
       <div class="goal-card">
         <div class="gc-top">
@@ -1758,12 +1810,14 @@ const S = {
   customTo: null,
   pnlCollapsed: false,
   tradeImg: null,
+  transactions: [], // [{id, type:'deposit'|'withdraw', amount, date, note}]
 };
 
 function load() {
   try {
     const d = JSON.parse(localStorage.getItem('tradedairy2') || '{}');
     Object.assign(S, d);
+    if (!S.transactions) S.transactions = [];
   } catch(e){}
   try {
     const e = JSON.parse(localStorage.getItem('tradedairy2_entries') || '{}');
@@ -1771,7 +1825,7 @@ function load() {
   } catch(e){}
 }
 async function save() {
-  const prefs = {goals:S.goals,sport:S.sport,sportName:S.sportName,showWeekends:S.showWeekends,privacy:S.privacy};
+  const prefs = {goals:S.goals,sport:S.sport,sportName:S.sportName,showWeekends:S.showWeekends,privacy:S.privacy,transactions:S.transactions||[]};
   localStorage.setItem('tradedairy2', JSON.stringify(prefs));
   localStorage.setItem('tradedairy2_entries', JSON.stringify(S.entries));
   if (window._fbSavePrefs) {
@@ -1939,6 +1993,18 @@ function renderMonth(){
   setValEl('m-total',nd.t,nd.c);
   document.getElementById('m-wr').textContent=`${ms.wr}%`;
 
+
+  // deposit / withdraw stats for this month
+  const mk = monthKey(y,m);
+  const mTx = (S.transactions||[]).filter(t => t.date && t.date.startsWith(mk));
+  const totalDep = mTx.filter(t=>t.type==='deposit').reduce((s,t)=>s+(+t.amount),0);
+  const totalWit = mTx.filter(t=>t.type==='withdraw').reduce((s,t)=>s+(+t.amount),0);
+  const depCount = mTx.filter(t=>t.type==='deposit').length;
+  const witCount = mTx.filter(t=>t.type==='withdraw').length;
+  document.getElementById('m-dep').textContent = '₹'+totalDep.toFixed(2);
+  document.getElementById('m-wit').textContent = '₹'+totalWit.toFixed(2);
+  document.getElementById('m-dep-count').textContent = depCount+' entr'+(depCount===1?'y':'ies');
+  document.getElementById('m-wit-count').textContent = witCount+' entr'+(witCount===1?'y':'ies');
   // goal
   const gk=monthKey(y,m), goal=S.goals[gk];
   setValEl('goal-cur',nd.t,nd.c);
@@ -3194,6 +3260,78 @@ function closeNoteDetail(){
 
 // Paywall JS moved to <head>
 
+
+// ══════════════════════════════════════════
+// DEPOSIT / WITHDRAW
+// ══════════════════════════════════════════
+let _dwType = 'deposit';
+
+function openDWModal(type) {
+  _dwType = type || 'deposit';
+  setDWType(_dwType);
+  // default date = today
+  const today = new Date();
+  document.getElementById('dw-date').value = dayKey(today.getFullYear(), today.getMonth(), today.getDate());
+  document.getElementById('dw-amount').value = '';
+  document.getElementById('dw-note').value = '';
+  renderDWHistory();
+  document.getElementById('dw-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('dw-amount').focus(), 200);
+}
+
+function closeDWModal() {
+  document.getElementById('dw-modal').classList.remove('open');
+}
+
+function setDWType(type) {
+  _dwType = type;
+  document.getElementById('dw-btn-dep').className = 'dw-type-btn' + (type==='deposit'?' dep-active':'');
+  document.getElementById('dw-btn-wit').className = 'dw-type-btn' + (type==='withdraw'?' wit-active':'');
+  document.getElementById('dw-modal-title').textContent = type==='deposit' ? '⬇ Log Deposit' : '⬆ Log Withdrawal';
+}
+
+function saveDWEntry() {
+  const amt = parseFloat(document.getElementById('dw-amount').value);
+  const date = document.getElementById('dw-date').value;
+  const note = document.getElementById('dw-note').value.trim();
+  if (!amt || amt <= 0) { alert('Please enter a valid amount.'); return; }
+  if (!date) { alert('Please select a date.'); return; }
+  if (!S.transactions) S.transactions = [];
+  S.transactions.push({ id: genId(), type: _dwType, amount: amt, date, note });
+  // sort by date desc
+  S.transactions.sort((a,b) => b.date.localeCompare(a.date));
+  save();
+  renderDWHistory();
+  renderMonth();
+  document.getElementById('dw-amount').value = '';
+  document.getElementById('dw-note').value = '';
+}
+
+function deleteDWEntry(id) {
+  if (!confirm('Delete this transaction?')) return;
+  S.transactions = (S.transactions||[]).filter(t => t.id !== id);
+  save();
+  renderDWHistory();
+  renderMonth();
+}
+
+function renderDWHistory() {
+  const list = document.getElementById('dw-history-list');
+  const all = (S.transactions||[]).slice().sort((a,b) => b.date.localeCompare(a.date));
+  if (!all.length) { list.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:10px 0">No transactions yet</div>'; return; }
+  list.innerHTML = all.map(t => `
+    <div class="dw-hist-item">
+      <div class="dw-hist-left">
+        <span class="dw-hist-type ${t.type==='deposit'?'dep':'wit'}">${t.type==='deposit'?'⬇ Deposit':'⬆ Withdraw'}</span>
+        <span class="dw-hist-date">${t.date}${t.note?' · '+t.note:''}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="dw-hist-amt ${t.type==='deposit'?'dep':'wit'}">₹${(+t.amount).toFixed(2)}</span>
+        <button class="dw-hist-del" onclick="deleteDWEntry('${t.id}')">🗑</button>
+      </div>
+    </div>`).join('');
+}
+
 // ══════════════════════════════════════════
 // BOOT
 // ══════════════════════════════════════════
@@ -3340,5 +3478,35 @@ renderMonth();
   </div>
 </div>
   
+
+<!-- DEPOSIT / WITHDRAW MODAL -->
+<div class="modal-overlay" id="dw-modal">
+  <div class="modal-sheet">
+    <div class="ms-header">
+      <h3 id="dw-modal-title">Log Transaction</h3>
+      <button class="ms-close" onclick="closeDWModal()">✕</button>
+    </div>
+    <div class="dw-type-toggle">
+      <button class="dw-type-btn dep-active" id="dw-btn-dep" onclick="setDWType('deposit')">⬇ Deposit</button>
+      <button class="dw-type-btn" id="dw-btn-wit" onclick="setDWType('withdraw')">⬆ Withdraw</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">AMOUNT (₹)</label>
+        <input class="form-input" id="dw-amount" type="number" inputmode="decimal" placeholder="0.00" min="0"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">DATE</label>
+        <input class="form-input" id="dw-date" type="date"/>
+      </div>
+    </div>
+    <div class="form-group full" style="margin-bottom:14px">
+      <label class="form-label">NOTE (OPTIONAL)</label>
+      <input class="form-input" id="dw-note" type="text" placeholder="e.g. Bank transfer"/>
+    </div>
+    <button class="submit-btn" onclick="saveDWEntry()">Save Transaction</button>
+    <div class="dw-history-list" id="dw-history-list"></div>
+  </div>
+</div>
 </body>
 </html>
