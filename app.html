@@ -144,7 +144,8 @@ if (FIREBASE_READY) {
         if (d.sportName) S.sportName = d.sportName;
         if (d.showWeekends !== undefined) S.showWeekends = d.showWeekends;
         if (d.privacy !== undefined) S.privacy = d.privacy;
-        localStorage.setItem('tradedairy2', JSON.stringify({goals:S.goals,sport:S.sport,sportName:S.sportName,showWeekends:S.showWeekends,privacy:S.privacy}));
+        if (d.transactions) S.transactions = d.transactions;
+        localStorage.setItem('tradedairy2', JSON.stringify({goals:S.goals,sport:S.sport,sportName:S.sportName,showWeekends:S.showWeekends,privacy:S.privacy,transactions:S.transactions||[]}));
         renderCalendar();
         applyPrivacy();
       }
